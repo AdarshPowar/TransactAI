@@ -14,7 +14,7 @@ dist/
 # virtual env
 venv/
 .venv/
-backend/myenv
+backend/myenv/
 
 
 # models temp
