@@ -10,6 +10,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, func
 import pandas as pd
 
+# ============================================================
+# 1. LOAD ENVIRONMENT VARIABLES FIRST!
+# ============================================================
+load_dotenv() 
+
+# ============================================================
+# 2. NOW WE CAN IMPORT LOCAL MODULES
+# ============================================================
 # Core modules
 from core.preprocessor import (
     clean_text_for_model,
@@ -17,7 +25,6 @@ from core.preprocessor import (
     extract_recipient,
     TransactionPreprocessor
 )
-
 from core.inference import TransactionClassifier
 
 # Routers
@@ -25,23 +32,14 @@ from api.models import Transaction, Feedback
 from api.db import get_db
 from api.insights import router as insights_router
 from api.budget import router as budget_router
-from api.predict import router as predict_router   # Ensure prediction API is enabled
+from api.predict import router as predict_router   
 
 # Training integration
 from training.train_model import train_with_feedback
 
-
 # ============================================================
-# Load environment variables
+# 3. FASTAPI APP INITIALIZATION (Only One!)
 # ============================================================
-
-load_dotenv()
-
-
-# ============================================================
-# FastAPI App
-# ============================================================
-
 app = FastAPI(
     title="TransactAI API",
     version="2.0",
@@ -51,22 +49,15 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://192.168.1.100:3000",
-        "https://your-frontend.vercel.app",
-        "content://",
-    ],
+    allow_origins=["*"], # Tighten this later for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # ============================================================
 # PostgreSQL Connection Pool (Legacy)
 # ============================================================
-
 try:
     db_pool = psycopg2.pool.SimpleConnectionPool(
         1,

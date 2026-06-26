@@ -32,3 +32,6 @@ seaborn==0.12.2
 # Database
 psycopg2
 sqlalchemy
+
+# Security
+passlib[bcrypt]
