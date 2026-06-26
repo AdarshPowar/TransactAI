@@ -76,6 +76,12 @@ class _TransactAIAppState extends State<TransactAIApp> {
       ),
     );
   }
+  void _handleNewTransaction(Transaction newTransaction) {
+    setState(() {
+      _transactions.add(newTransaction);
+    });
+    debugPrint("Transaction captured: ${newTransaction.merchant}");
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +146,15 @@ class _TransactAIAppState extends State<TransactAIApp> {
               }
             });
           },
+          onNewSmsReceived: (alert) {
+            setState(() {
+              final exists = _smsAlerts.any(
+                  (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
+              if (!exists) {
+                _smsAlerts.insert(0, alert);
+              }
+            });
+          },
         );
     }
   }
@@ -152,6 +167,7 @@ class TransactAIShell extends StatefulWidget {
   final VoidCallback onLogout;
   final Future<void> Function() onFetchSms;
   final Function(String alertBody) onSmsClassified;
+  final Function(SmsAlert) onNewSmsReceived;
 
   const TransactAIShell({
     super.key,
@@ -161,6 +177,7 @@ class TransactAIShell extends StatefulWidget {
     required this.onLogout,
     required this.onFetchSms,
     required this.onSmsClassified,
+    required this.onNewSmsReceived,
   });
 
   @override
@@ -171,6 +188,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
   int _currentIndex = 0;
   String? _classifyInitialText;
   Timer? _smsTimer;
+  final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey<DashboardScreenState>();
 
   @override
   void initState() {
@@ -178,12 +196,67 @@ class _TransactAIShellState extends State<TransactAIShell> {
     _smsTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) widget.onFetchSms();
     });
+    _initRealTimeSmsListener();
   }
 
   @override
   void dispose() {
     _smsTimer?.cancel();
     super.dispose();
+  }
+
+  void _initRealTimeSmsListener() {
+    SmsService.listenToIncomingSms((SmsAlert alert) async {
+      if (!mounted) return;
+
+      // 1. Inject real-time SMS into UI feed list
+      widget.onNewSmsReceived(alert);
+
+      // 2. Notify user processing has started
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Processing transaction SMS from ${alert.sender}..."),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      try {
+        // 3. Make HTTP request to backend classify API
+        final result = await ApiService.classify(alert.body);
+        
+        // 4. Mark SMS as classified
+        widget.onSmsClassified(alert.body);
+
+        // 5. Instantly refresh the Dashboard transaction list & summary
+        _dashboardKey.currentState?.refreshData();
+
+        // 6. Success message with transaction details
+        if (mounted) {
+          final category = result['category'] ?? 'Unresolved';
+          final amount = result['amount'] != null ? '₹${result['amount']}' : '';
+          final merchant = result['merchant'] ?? result['receiver'] ?? 'Unknown';
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Successfully auto-classified: $merchant ($category) $amount"),
+              backgroundColor: const Color(0xFF1D9E75),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint("❌ Error auto-classifying SMS: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Auto-classification failed: ${e.toString()}"),
+              backgroundColor: const Color(0xFFD85A30),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    });
   }
 
   void _classifySmsFromFeed(SmsAlert alert) {
@@ -196,8 +269,16 @@ class _TransactAIShellState extends State<TransactAIShell> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      // Dashboard now loads data from backend directly — no props needed
-      const DashboardScreen(),
+      // Dashboard now loads data from backend directly
+      DashboardScreen(
+        key: _dashboardKey,
+        transactions: const [],
+        onUpdateTransaction: (tx) {},
+        onSync: () => widget.onFetchSms(),
+        onLogout: widget.onLogout,
+        activeAvatarIndex: widget.activeAvatarIndex,
+        onAvatarChanged: widget.onAvatarChanged,
+      ),
 
       // Insights screen — still uses mock/local data, update separately if needed
       InsightsScreen(
@@ -212,13 +293,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
 
       // Classify screen — calls backend, notifies parent when SMS classified
       ClassifyScreen(
-        key: ValueKey(_classifyInitialText ?? 'classify-default'),
-        initialText: _classifyInitialText,
-        onTransactionSaved: (result) {
-          if (_classifyInitialText != null) {
-            widget.onSmsClassified(_classifyInitialText!);
-          }
-        },
+        onAddTransaction: _handleNewTransaction, // This connects the service to your state
       ),
     ];
 

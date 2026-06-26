@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -18,15 +19,30 @@ class ApiService {
 
   // ── /classify ──────────────────────────────────────────
   static Future<Map<String, dynamic>> classify(String message) async {
-    final res = await _client
-        .post(
-          Uri.parse('$_baseUrl/classify'),
-          headers: _headers,
-          body: jsonEncode({'message': message}),
-        )
-        .timeout(const Duration(seconds: 15));
-    _assertOk(res);
-    return _decode(res);
+    try {
+      final res = await _client
+          .post(
+            Uri.parse('$_baseUrl/classify'),
+            headers: _headers,
+            body: jsonEncode({
+              'sms_text': message,
+              'message': message, // backward compatibility
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      _assertOk(res);
+      return _decode(res);
+    } on TimeoutException catch (_) {
+      throw const ApiException(
+        statusCode: 408,
+        message: 'Connection timed out. Please check if the Python backend is running at $_baseUrl.',
+      );
+    } catch (e) {
+      throw ApiException(
+        statusCode: 503,
+        message: 'Failed to connect to backend at $_baseUrl: $e',
+      );
+    }
   }
 
   // ── /manual-category ───────────────────────────────────

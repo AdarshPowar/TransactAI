@@ -22,14 +22,18 @@ class DashboardScreen extends StatefulWidget {
   });
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _summary;
   List<Map<String, dynamic>> _apiTransactions = [];
   bool _apiLoading = true;
   bool _apiError = false;
+
+  void refreshData() {
+    _loadFromApi();
+  }
 
   @override
   void initState() {
@@ -73,7 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadFromApi,
-        color: AppColors.accent,
+        color: const Color(0xFF534AB7),
         child: CustomScrollView(
           slivers: [
             // ── App Bar ──────────────────────────────────
@@ -195,7 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           border: Border.all(color: AppColors.border),
         ),
         child: const Center(
-          child: CircularProgressIndicator(color: AppColors.accent),
+          child: CircularProgressIndicator(color: Color(0xFF534AB7)), 
         ),
       );
 

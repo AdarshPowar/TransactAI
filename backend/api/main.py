@@ -162,9 +162,9 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
     """
     Main classification endpoint. Uses consistent preprocessing everywhere.
     """
-    text = payload.get("message")
+    text = payload.get("sms_text") or payload.get("message")
     if not text:
-        raise HTTPException(status_code=400, detail="Missing 'message' field")
+        raise HTTPException(status_code=400, detail="Missing 'sms_text' or 'message' field")
 
     # Use consistent preprocessing
     cleaned = clean_text_for_model(text)
@@ -181,6 +181,7 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
             "allow_new_category": True,
             "amount": amount,
             "receiver": receiver,
+            "merchant": receiver,
             "clean_text": cleaned,
             "raw_text": text,
             "message": "Model not loaded - please train the model first",
@@ -202,6 +203,7 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
             "allow_new_category": True,
             "amount": amount,
             "receiver": receiver,
+            "merchant": receiver,
             "clean_text": cleaned,
             "raw_text": text,
         }
@@ -229,6 +231,7 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
                 "confidence": float(conf),
                 "amount": amount,
                 "receiver": receiver,
+                "merchant": receiver,
             }
         except Exception as e:
             print(f"❌ Database error: {e}")
@@ -241,6 +244,7 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
                 "confidence": float(conf),
                 "amount": amount,
                 "receiver": receiver,
+                "merchant": receiver,
                 "message": "Classification successful but database save failed",
             }
 
@@ -252,6 +256,7 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
         "allow_new_category": True,
         "amount": amount,
         "receiver": receiver,
+        "merchant": receiver,
         "clean_text": cleaned,
         "raw_text": text,
     }
