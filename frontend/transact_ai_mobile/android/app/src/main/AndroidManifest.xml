@@ -6,19 +6,11 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
 
     <application
-        android:label="transact_ai_mobile"
+        android:label="com.transactai.app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="true">
-        <application ... >
-    <receiver android:name="com.shounakmulay.telephony.SmsReceiver" android:permission="android.permission.BROADCAST_SMS" android:exported="true">
-        <intent-filter>
-            <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-        </intent-filter>
-    </receiver>
-    ...
-</application>
 
         <activity
             android:name=".MainActivity"
@@ -43,14 +35,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
-
-        <receiver android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
-            android:permission="android.permission.BROADCAST"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
 
     </application>
 

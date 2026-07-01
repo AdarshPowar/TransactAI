@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'theme/constants.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/insights_screen.dart';
@@ -10,11 +12,21 @@ import 'dart:async';
 import 'screens/sms_feed_screen.dart';
 import 'services/sms_service.dart';
 import 'services/api_service.dart';
-import 'package:transact_ai_mobile/models/transaction.dart';
+import 'services/auth_service.dart';
+import 'models/transaction.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const TransactAIApp());
 }
+
+/// Global key so SnackBars can be shown from anywhere, even before a
+/// Scaffold ancestor exists at the calling context's position in the tree.
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 enum AppStatus { launch, login, signup, authenticated }
 
@@ -27,20 +39,14 @@ class TransactAIApp extends StatefulWidget {
 
 class _TransactAIAppState extends State<TransactAIApp> {
   AppStatus _status = AppStatus.launch;
+  // Start completely empty — no mocks
   List<SmsAlert> _smsAlerts = [];
   int _avatarIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _smsAlerts = SmsAlertMock.mockSmsAlerts;
-  }
 
   Future<void> _fetchSms() async {
     try {
       final fetchedAlerts = await SmsService.fetchIncomingSms();
       if (!mounted) return;
-
       int newCount = 0;
       setState(() {
         for (final alert in fetchedAlerts) {
@@ -52,43 +58,44 @@ class _TransactAIAppState extends State<TransactAIApp> {
           }
         }
       });
-
-      if (newCount > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fetched $newCount new banking SMS alert(s).'),
-            backgroundColor: AppColors.surfaceElevated,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      if (newCount > 0 && mounted) {
+        rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+          content: Text('Found $newCount new banking SMS.'),
+          backgroundColor: AppColors.surfaceElevated,
+          duration: const Duration(seconds: 2),
+        ));
       }
     } catch (e) {
-      debugPrint('Error fetching SMS in UI: $e');
+      debugPrint('Error fetching SMS: $e');
     }
   }
 
-  void _handleLogout() {
-    setState(() => _status = AppStatus.login);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+  void _handleLogout() async {
+    try {
+      await AuthService.instance.signOut();
+    } catch (e) {
+      debugPrint('Sign out error: $e');
+    }
+    setState(() {
+      _status = AppStatus.login;
+      // Clear alerts on logout so next user starts fresh
+      _smsAlerts = [];
+    });
+    if (mounted) {
+      rootScaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(
         content: Text('Logged out successfully.'),
         duration: Duration(seconds: 1),
-      ),
-    );
-  }
-  void _handleNewTransaction(Transaction newTransaction) {
-    setState(() {
-      _transactions.add(newTransaction);
-    });
-    debugPrint("Transaction captured: ${newTransaction.merchant}");
+      ));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TransactAI Mobile',
+      title: 'TransactAI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       home: Scaffold(
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
@@ -109,11 +116,43 @@ class _TransactAIAppState extends State<TransactAIApp> {
         return LoginScreen(
           key: const ValueKey('login'),
           onLogin: (email, password) async {
-            // Try real backend login, fall through on failure
+            try {
+              // Firebase email/password sign-in
+              await AuthService.instance.signInWithEmail(email, password);
+            } catch (e) {
+              debugPrint('Email login error: $e');
+              if (mounted) {
+                rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+                  content: Text(e.toString()),
+                  backgroundColor: AppColors.categoryHealthcare,
+                ));
+              }
+              return; // don't proceed to authenticated state on failure
+            }
             try {
               await ApiService.login(email, password);
             } catch (_) {}
+            if (mounted) setState(() => _status = AppStatus.authenticated);
+          },
+          onPhoneLogin: (phone) {
+            // Phone OTP already verified by the time this fires
+            // (LoginScreen calls AuthService.verifyOtp internally — see below)
             setState(() => _status = AppStatus.authenticated);
+          },
+          onGoogleLogin: () async {
+            try {
+              final user = await AuthService.instance.signInWithGoogle();
+              if (user == null) return; // user cancelled
+              setState(() => _status = AppStatus.authenticated);
+            } catch (e) {
+              debugPrint('Google login error: $e');
+              if (mounted) {
+                rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+                  content: Text('Google sign-in failed: $e'),
+                  backgroundColor: AppColors.categoryHealthcare,
+                ));
+              }
+            }
           },
           onGoToSignup: () => setState(() => _status = AppStatus.signup),
         );
@@ -121,11 +160,13 @@ class _TransactAIAppState extends State<TransactAIApp> {
         return SignupScreen(
           key: const ValueKey('signup'),
           onSignup: (name, email, password) async {
-            try {
-              await ApiService.signup(name, email, password);
+  // Let FirebaseAuthException propagate to SignupScreen's error banner
+              await AuthService.instance.signUpWithEmail(email, password);
+               try {
+               await ApiService.signup(name, email, password);
             } catch (_) {}
-            setState(() => _status = AppStatus.authenticated);
-          },
+             if (mounted) setState(() => _status = AppStatus.authenticated);
+            },
           onGoToLogin: () => setState(() => _status = AppStatus.login),
         );
       case AppStatus.authenticated:
@@ -148,11 +189,9 @@ class _TransactAIAppState extends State<TransactAIApp> {
           },
           onNewSmsReceived: (alert) {
             setState(() {
-              final exists = _smsAlerts.any(
-                  (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
-              if (!exists) {
-                _smsAlerts.insert(0, alert);
-              }
+              final exists = _smsAlerts.any((s) =>
+                  s.id == alert.id || s.body.trim() == alert.body.trim());
+              if (!exists) _smsAlerts.insert(0, alert);
             });
           },
         );
@@ -188,14 +227,21 @@ class _TransactAIShellState extends State<TransactAIShell> {
   int _currentIndex = 0;
   String? _classifyInitialText;
   Timer? _smsTimer;
-  final GlobalKey<DashboardScreenState> _dashboardKey = GlobalKey<DashboardScreenState>();
+  final GlobalKey<DashboardScreenState> _dashboardKey =
+      GlobalKey<DashboardScreenState>();
 
   @override
   void initState() {
     super.initState();
-    _smsTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    // Fetch real SMS immediately on login
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onFetchSms();
+    });
+    // Then refresh every 60 seconds
+    _smsTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) widget.onFetchSms();
     });
+    // Listen for real-time incoming SMS
     _initRealTimeSmsListener();
   }
 
@@ -209,54 +255,42 @@ class _TransactAIShellState extends State<TransactAIShell> {
     SmsService.listenToIncomingSms((SmsAlert alert) async {
       if (!mounted) return;
 
-      // 1. Inject real-time SMS into UI feed list
+      // Add to feed immediately
       widget.onNewSmsReceived(alert);
 
-      // 2. Notify user processing has started
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Processing transaction SMS from ${alert.sender}..."),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('New SMS from ${alert.sender} — classifying...'),
+        duration: const Duration(seconds: 2),
+      ));
 
       try {
-        // 3. Make HTTP request to backend classify API
         final result = await ApiService.classify(alert.body);
-        
-        // 4. Mark SMS as classified
         widget.onSmsClassified(alert.body);
-
-        // 5. Instantly refresh the Dashboard transaction list & summary
         _dashboardKey.currentState?.refreshData();
 
-        // 6. Success message with transaction details
         if (mounted) {
-          final category = result['category'] ?? 'Unresolved';
-          final amount = result['amount'] != null ? '₹${result['amount']}' : '';
-          final merchant = result['merchant'] ?? result['receiver'] ?? 'Unknown';
+          final category = result['category'] ?? 'Unknown';
+          final amount = result['amount'] != null
+              ? '₹${result['amount']}'
+              : '';
+          final merchant =
+              result['receiver'] ?? result['receiver_name'] ?? alert.sender;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Successfully auto-classified: $merchant ($category) $amount"),
-              backgroundColor: const Color(0xFF1D9E75),
-              duration: const Duration(seconds: 4),
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Classified: $merchant → $category $amount'),
+            backgroundColor: const Color(0xFF1D9E75),
+            duration: const Duration(seconds: 4),
+          ));
         }
       } catch (e) {
-        debugPrint("❌ Error auto-classifying SMS: $e");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Auto-classification failed: ${e.toString()}"),
-              backgroundColor: const Color(0xFFD85A30),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+        debugPrint('Auto-classify error: $e');
       }
     });
+  }
+
+  void _handleNewTransaction(Transaction txn) {
+    // Dashboard fetches live from API — just trigger a refresh
+    _dashboardKey.currentState?.refreshData();
   }
 
   void _classifySmsFromFeed(SmsAlert alert) {
@@ -269,31 +303,27 @@ class _TransactAIShellState extends State<TransactAIShell> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      // Dashboard now loads data from backend directly
       DashboardScreen(
         key: _dashboardKey,
-        transactions: const [],
-        onUpdateTransaction: (tx) {},
-        onSync: () => widget.onFetchSms(),
+        transactions: const [],        // always empty — dashboard loads from API
+        onUpdateTransaction: (_) {},
+        onSync: widget.onFetchSms,
         onLogout: widget.onLogout,
         activeAvatarIndex: widget.activeAvatarIndex,
         onAvatarChanged: widget.onAvatarChanged,
       ),
-
-      // Insights screen — still uses mock/local data, update separately if needed
       InsightsScreen(
-        transactions: const [],
+        transactions: const [],        // always empty — insights loads from API
       ),
-
       SmsFeedScreen(
-        smsAlerts: widget.smsAlerts,
+        smsAlerts: widget.smsAlerts,   // real SMS only, no mocks
         onClassifySms: _classifySmsFromFeed,
         onFetchSms: widget.onFetchSms,
       ),
-
-      // Classify screen — calls backend, notifies parent when SMS classified
       ClassifyScreen(
-        onAddTransaction: _handleNewTransaction, // This connects the service to your state
+        key: ValueKey(_classifyInitialText ?? 'classify-default'),
+        onAddTransaction: _handleNewTransaction,
+        initialText: _classifyInitialText,
       ),
     ];
 
@@ -315,12 +345,10 @@ class _TransactAIShellState extends State<TransactAIShell> {
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-              if (index != 3) _classifyInitialText = null;
-            });
-          },
+          onTap: (index) => setState(() {
+            _currentIndex = index;
+            if (index != 3) _classifyInitialText = null;
+          }),
           items: [
             const BottomNavigationBarItem(
               icon: Icon(Icons.dashboard_outlined),
@@ -333,25 +361,20 @@ class _TransactAIShellState extends State<TransactAIShell> {
               label: 'Insights',
             ),
             BottomNavigationBarItem(
-              icon: Stack(
-                children: [
-                  const Icon(Icons.mail_outline_outlined),
-                  if (pendingSmsCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(1),
-                        decoration: const BoxDecoration(
-                          color: Colors.amber,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                            minWidth: 8, minHeight: 8),
-                      ),
+              icon: Stack(children: [
+                const Icon(Icons.mail_outline_outlined),
+                if (pendingSmsCount > 0)
+                  Positioned(
+                    right: 0, top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(1),
+                      decoration: const BoxDecoration(
+                          color: Colors.amber, shape: BoxShape.circle),
+                      constraints:
+                          const BoxConstraints(minWidth: 8, minHeight: 8),
                     ),
-                ],
-              ),
+                  ),
+              ]),
               activeIcon: const Icon(Icons.mail),
               label: 'SMS Feed',
             ),
@@ -365,4 +388,4 @@ class _TransactAIShellState extends State<TransactAIShell> {
       ),
     );
   }
-}
+} 

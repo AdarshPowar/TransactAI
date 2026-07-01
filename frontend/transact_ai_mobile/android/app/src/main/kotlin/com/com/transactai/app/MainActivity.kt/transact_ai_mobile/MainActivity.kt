@@ -1,4 +1,4 @@
-package com.example.transact_ai_mobile
+package com.transactai.app
 
 import io.flutter.embedding.android.FlutterActivity
 

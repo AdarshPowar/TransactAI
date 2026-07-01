@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/constants.dart';
 
 class SignupScreen extends StatefulWidget {
-  final Function(String name, String email, String password) onSignup;
+  final Future<void> Function(String name, String email, String password) onSignup;
   final VoidCallback onGoToLogin;
 
   const SignupScreen({
@@ -25,6 +25,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
   
   // Password Strength State
   double _strengthValue = 0.0; // 0.0 (empty) to 1.0 (strong)
@@ -82,25 +83,27 @@ class _SignupScreenState extends State<SignupScreen> {
     });
   }
 
-  void _handleSignup() {
+  void _handleSignup() async {
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    // Simulate backend network delay
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      widget.onSignup(
-        _nameController.text,
-        _emailController.text,
+    try {
+      await widget.onSignup(
+        _nameController.text.trim(),
+        _emailController.text.trim(),
         _passwordController.text,
       );
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -143,6 +146,31 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                         ),
                         const SizedBox(height: 28),
+
+                        // Error Banner
+                        if (_errorMessage != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.categoryHealthcare.withValues(alpha: 0.08),
+                              border: Border.all(
+                                color: AppColors.categoryHealthcare.withValues(alpha: 0.4),
+                                width: 0.8,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.categoryHealthcare,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
 
                         // Name Field
                         const Text(
