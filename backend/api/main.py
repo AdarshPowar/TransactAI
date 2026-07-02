@@ -18,6 +18,7 @@ load_dotenv()
 # ============================================================
 # 2. NOW WE CAN IMPORT LOCAL MODULES
 # ============================================================
+# >>>>>>> main
 # Core modules
 from core.preprocessor import (
     clean_text_for_model,
@@ -25,6 +26,9 @@ from core.preprocessor import (
     extract_recipient,
     TransactionPreprocessor
 )
+# <<<<<<< feature/frontend-fix
+
+# >>>>>>> main
 from core.inference import TransactionClassifier
 
 # Routers
@@ -32,14 +36,31 @@ from api.models import Transaction, Feedback
 from api.db import get_db
 from api.insights import router as insights_router
 from api.budget import router as budget_router
+# <<<<<<< feature/frontend-fix
 from api.predict import router as predict_router   
+from api.predict import router as predict_router   # Ensure prediction API is enabled
+# >>>>>>> main
 
 # Training integration
 from training.train_model import train_with_feedback
 
+# <<<<<<< feature/frontend-fix
 # ============================================================
 # 3. FASTAPI APP INITIALIZATION (Only One!)
 # ============================================================
+
+# ============================================================
+# Load environment variables
+# ============================================================
+
+load_dotenv()
+
+
+# ============================================================
+# FastAPI App
+# ============================================================
+
+# >>>>>>> main
 app = FastAPI(
     title="TransactAI API",
     version="2.0",
@@ -49,15 +70,30 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
+# <<<<<<< feature/frontend-fix
     allow_origins=["*"], # Tighten this later for production
+    allow_origins=[
+        "http://localhost:3000",
+        "http://192.168.1.100:3000",
+        "https://your-frontend.vercel.app",
+        "content://",
+    ],
+# >>>>>>> main
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# <<<<<<< feature/frontend-fix
 # ============================================================
 # PostgreSQL Connection Pool (Legacy)
 # ============================================================
+
+# ============================================================
+# PostgreSQL Connection Pool (Legacy)
+# ============================================================
+
+# >>>>>>> main
 try:
     db_pool = psycopg2.pool.SimpleConnectionPool(
         1,
@@ -165,6 +201,9 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
     text = payload.get("sms_text") or payload.get("message")
     if not text:
         raise HTTPException(status_code=400, detail="Missing 'sms_text' or 'message' field")
+    text = payload.get("message")
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing 'message' field")
 
     # Use consistent preprocessing
     cleaned = clean_text_for_model(text)

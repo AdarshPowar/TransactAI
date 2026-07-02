@@ -14,8 +14,11 @@ dist/
 # virtual env
 venv/
 .venv/
+# <<<<<<< feature/frontend-fix
 backend/myenv/
 
+=======
+# >>>>>>> main
 
 # models temp
 backend/models/*.tmp
