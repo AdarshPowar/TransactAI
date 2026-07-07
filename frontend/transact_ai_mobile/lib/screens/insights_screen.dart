@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../theme/constants.dart';
 import '../widgets/donut_chart.dart';
+import '../services/api_service.dart';
 
-class InsightsScreen extends StatelessWidget {
+class InsightsScreen extends StatefulWidget {
   final List<Transaction> transactions;
 
   const InsightsScreen({
@@ -12,17 +13,59 @@ class InsightsScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final totalSpent = transactions.fold<double>(0, (sum, t) => sum + t.amount);
-    
-    final Map<String, double> categorySums = {};
-    final Map<String, int> categoryCounts = {};
-    
-    for (var t in transactions) {
-      categorySums[t.category] = (categorySums[t.category] ?? 0) + t.amount;
-      categoryCounts[t.category] = (categoryCounts[t.category] ?? 0) + 1;
+  State<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends State<InsightsScreen> {
+  Map<String, dynamic>? _summary;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await ApiService.getSummary();
+      if (mounted) setState(() { _summary = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Could not load insights.'; _loading = false; });
     }
+  }
     
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off, color: AppColors.textMuted, size: 40),
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _loadSummary, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    final categorySummary = (_summary?['category_summary'] as Map<String, dynamic>?) ?? {};
+    final totalSpent = (_summary?['total_spent'] as num?)?.toDouble() ?? 0.0;
+
+    final Map<String, double> categorySums = categorySummary.map(
+      (k, v) => MapEntry(k, (v as num).toDouble()),
+    );
+    final Map<String, int> categoryCounts = {};
+
     final List<DonutChartData> chartData = [];
     categorySums.forEach((cat, amt) {
       chartData.add(DonutChartData(
@@ -31,10 +74,14 @@ class InsightsScreen extends StatelessWidget {
         color: AppColors.getCategoryColor(cat),
       ));
     });
-    
+
     chartData.sort((a, b) => b.amount.compareTo(a.amount));
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: _loadSummary,
+      color: Colors.white,
+      backgroundColor: AppColors.surface,
+      child: SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -99,7 +146,7 @@ class InsightsScreen extends StatelessWidget {
                       ),
                 ),
                 Text(
-                  '${chartData.length} categories',
+                  'Rs{chartData.length} categories',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textMuted,
@@ -144,6 +191,7 @@ class InsightsScreen extends StatelessWidget {
           ],
         ),
       ),
+      ), // RefreshIndicator
     );
   }
 
@@ -203,7 +251,7 @@ class InsightsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '-\$${amount.toStringAsFixed(2)}',
+                '₹{amount.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -212,7 +260,7 @@ class InsightsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '$percentage%',
+                'Rspercentage%',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

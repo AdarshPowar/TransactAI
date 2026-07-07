@@ -195,7 +195,7 @@ def train():
         labels=train_labels,
         val_data=(val_df["clean_text"].tolist(), val_df["Category"].tolist()),
         output_dir=str(MODEL_DIR / "classifier_ckpts"),
-        epochs=1,
+        epochs=3,
         batch_size=16,
         learning_rate=2e-5,
         weight_decay=0.01,

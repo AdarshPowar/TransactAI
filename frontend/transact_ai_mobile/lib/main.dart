@@ -53,10 +53,12 @@ class _TransactAIAppState extends State<TransactAIApp> {
           final exists = _smsAlerts.any(
               (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
           if (!exists) {
-            _smsAlerts.insert(0, alert);
+            _smsAlerts.add(alert); // add to end, then sort below
             newCount++;
           }
         }
+        // Always sort newest first after merging
+        _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       });
       if (newCount > 0 && mounted) {
         rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
@@ -160,13 +162,13 @@ class _TransactAIAppState extends State<TransactAIApp> {
         return SignupScreen(
           key: const ValueKey('signup'),
           onSignup: (name, email, password) async {
-  // Let FirebaseAuthException propagate to SignupScreen's error banner
-              await AuthService.instance.signUpWithEmail(email, password);
-               try {
-               await ApiService.signup(name, email, password);
+            // Let the exception propagate to SignupScreen so it shows inline
+            await AuthService.instance.signUpWithEmail(email, password);
+            try {
+              await ApiService.signup(name, email, password);
             } catch (_) {}
-             if (mounted) setState(() => _status = AppStatus.authenticated);
-            },
+            if (mounted) setState(() => _status = AppStatus.authenticated);
+          },
           onGoToLogin: () => setState(() => _status = AppStatus.login),
         );
       case AppStatus.authenticated:
@@ -191,7 +193,10 @@ class _TransactAIAppState extends State<TransactAIApp> {
             setState(() {
               final exists = _smsAlerts.any((s) =>
                   s.id == alert.id || s.body.trim() == alert.body.trim());
-              if (!exists) _smsAlerts.insert(0, alert);
+              if (!exists) {
+                _smsAlerts.add(alert);
+                _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+              }
             });
           },
         );
@@ -291,6 +296,11 @@ class _TransactAIShellState extends State<TransactAIShell> {
   void _handleNewTransaction(Transaction txn) {
     // Dashboard fetches live from API — just trigger a refresh
     _dashboardKey.currentState?.refreshData();
+    // Mark the source SMS as classified if it came from the feed
+    if (_pendingClassifyAlertBody != null) {
+      widget.onSmsClassified(_pendingClassifyAlertBody!);
+      _pendingClassifyAlertBody = null;
+    }
   }
 
   void _classifySmsFromFeed(SmsAlert alert) {
@@ -298,7 +308,12 @@ class _TransactAIShellState extends State<TransactAIShell> {
       _classifyInitialText = alert.body;
       _currentIndex = 3;
     });
+    // Mark as classified when user navigates to classify this SMS
+    // The actual classified update happens after ClassifyScreen succeeds
+    _pendingClassifyAlertBody = alert.body;
   }
+
+  String? _pendingClassifyAlertBody;
 
   @override
   Widget build(BuildContext context) {
@@ -388,4 +403,4 @@ class _TransactAIShellState extends State<TransactAIShell> {
       ),
     );
   }
-} 
+}
