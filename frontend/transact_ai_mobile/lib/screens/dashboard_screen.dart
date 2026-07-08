@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../theme/constants.dart';
 import '../services/api_service.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Transaction> transactions;
@@ -102,8 +103,19 @@ class DashboardScreenState extends State<DashboardScreen> {
                         tooltip: 'Sync',
                       ),
                       GestureDetector(
-                        onTap: widget.onLogout,
-                        child: CircleAvatar(
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          activeAvatarIndex: widget.activeAvatarIndex,
+          onAvatarChanged: widget.onAvatarChanged,
+          onLogout: widget.onLogout,
+        ),
+      ),
+    );
+  },
+  child: CircleAvatar(
                           radius: 16,
                           backgroundColor: AppColors.surface,
                           child: Text(

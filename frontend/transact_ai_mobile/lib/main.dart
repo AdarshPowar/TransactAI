@@ -14,6 +14,12 @@ import 'services/sms_service.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'models/transaction.dart';
+// ignore: unused_import
+import 'screens/profile_screen.dart';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'services/pin_service.dart';
+import 'screens/pin_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +34,7 @@ Future<void> main() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-enum AppStatus { launch, login, signup, authenticated }
+enum AppStatus { checking, launch, login, signup, pinSetup, locked, authenticated }
 
 class TransactAIApp extends StatefulWidget {
   const TransactAIApp({super.key});
@@ -38,10 +44,34 @@ class TransactAIApp extends StatefulWidget {
 }
 
 class _TransactAIAppState extends State<TransactAIApp> {
-  AppStatus _status = AppStatus.launch;
-  // Start completely empty — no mocks
+  AppStatus _status = AppStatus.checking;
   List<SmsAlert> _smsAlerts = [];
   int _avatarIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final user = FirebaseAuth.instance.currentUser;
+    if (!mounted) return;
+    if (user != null) {
+      // User is logged in — check if PIN is set up
+      final hasPin = await PinService.hasPin();
+      if (!mounted) return;
+      if (hasPin) {
+        setState(() => _status = AppStatus.locked);
+      } else {
+        // Logged in but no PIN set — go to PIN setup
+        setState(() => _status = AppStatus.pinSetup);
+      }
+    } else {
+      setState(() => _status = AppStatus.launch);
+    }
+  }
 
   Future<void> _fetchSms() async {
     try {
@@ -53,10 +83,11 @@ class _TransactAIAppState extends State<TransactAIApp> {
           final exists = _smsAlerts.any(
               (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
           if (!exists) {
-            _smsAlerts.insert(0, alert);
+            _smsAlerts.add(alert);
             newCount++;
           }
         }
+        _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       });
       if (newCount > 0 && mounted) {
         rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
@@ -73,12 +104,12 @@ class _TransactAIAppState extends State<TransactAIApp> {
   void _handleLogout() async {
     try {
       await AuthService.instance.signOut();
+      await PinService.clearPin();
     } catch (e) {
       debugPrint('Sign out error: $e');
     }
     setState(() {
       _status = AppStatus.login;
-      // Clear alerts on logout so next user starts fresh
       _smsAlerts = [];
     });
     if (mounted) {
@@ -107,17 +138,45 @@ class _TransactAIAppState extends State<TransactAIApp> {
 
   Widget _buildCurrentScreen() {
     switch (_status) {
+      case AppStatus.checking:
+        return const Scaffold(
+          key: ValueKey('checking'),
+          backgroundColor: Colors.black,
+          body: Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
+        );
+
       case AppStatus.launch:
         return LaunchScreen(
           key: const ValueKey('launch'),
           onGetStarted: () => setState(() => _status = AppStatus.login),
         );
+
+      case AppStatus.pinSetup:
+        return PinScreen(
+          key: const ValueKey('pinSetup'),
+          mode: PinScreenMode.setup,
+          onSuccess: () => setState(() => _status = AppStatus.authenticated),
+        );
+
+      case AppStatus.locked:
+        return PinScreen(
+          key: const ValueKey('locked'),
+          mode: PinScreenMode.verify,
+          onSuccess: () => setState(() => _status = AppStatus.authenticated),
+          onLoginInstead: () async {
+            await PinService.clearPin();
+            await AuthService.instance.signOut();
+            setState(() => _status = AppStatus.login);
+          },
+        );
+
       case AppStatus.login:
         return LoginScreen(
           key: const ValueKey('login'),
           onLogin: (email, password) async {
             try {
-              // Firebase email/password sign-in
               await AuthService.instance.signInWithEmail(email, password);
             } catch (e) {
               debugPrint('Email login error: $e');
@@ -127,7 +186,7 @@ class _TransactAIAppState extends State<TransactAIApp> {
                   backgroundColor: AppColors.categoryHealthcare,
                 ));
               }
-              return; // don't proceed to authenticated state on failure
+              return;
             }
             try {
               await ApiService.login(email, password);
@@ -135,14 +194,12 @@ class _TransactAIAppState extends State<TransactAIApp> {
             if (mounted) setState(() => _status = AppStatus.authenticated);
           },
           onPhoneLogin: (phone) {
-            // Phone OTP already verified by the time this fires
-            // (LoginScreen calls AuthService.verifyOtp internally — see below)
             setState(() => _status = AppStatus.authenticated);
           },
           onGoogleLogin: () async {
             try {
               final user = await AuthService.instance.signInWithGoogle();
-              if (user == null) return; // user cancelled
+              if (user == null) return;
               setState(() => _status = AppStatus.authenticated);
             } catch (e) {
               debugPrint('Google login error: $e');
@@ -156,19 +213,20 @@ class _TransactAIAppState extends State<TransactAIApp> {
           },
           onGoToSignup: () => setState(() => _status = AppStatus.signup),
         );
+
       case AppStatus.signup:
         return SignupScreen(
           key: const ValueKey('signup'),
           onSignup: (name, email, password) async {
-  // Let FirebaseAuthException propagate to SignupScreen's error banner
-              await AuthService.instance.signUpWithEmail(email, password);
-               try {
-               await ApiService.signup(name, email, password);
+            await AuthService.instance.signUpWithEmail(email, password);
+            try {
+              await ApiService.signup(name, email, password);
             } catch (_) {}
-             if (mounted) setState(() => _status = AppStatus.authenticated);
-            },
+            if (mounted) setState(() => _status = AppStatus.authenticated);
+          },
           onGoToLogin: () => setState(() => _status = AppStatus.login),
         );
+
       case AppStatus.authenticated:
         return TransactAIShell(
           key: const ValueKey('shell'),
@@ -191,7 +249,10 @@ class _TransactAIAppState extends State<TransactAIApp> {
             setState(() {
               final exists = _smsAlerts.any((s) =>
                   s.id == alert.id || s.body.trim() == alert.body.trim());
-              if (!exists) _smsAlerts.insert(0, alert);
+              if (!exists) {
+                _smsAlerts.add(alert);
+                _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+              }
             });
           },
         );
@@ -226,6 +287,7 @@ class TransactAIShell extends StatefulWidget {
 class _TransactAIShellState extends State<TransactAIShell> {
   int _currentIndex = 0;
   String? _classifyInitialText;
+  String? _pendingClassifyAlertBody;
   Timer? _smsTimer;
   final GlobalKey<DashboardScreenState> _dashboardKey =
       GlobalKey<DashboardScreenState>();
@@ -233,15 +295,12 @@ class _TransactAIShellState extends State<TransactAIShell> {
   @override
   void initState() {
     super.initState();
-    // Fetch real SMS immediately on login
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onFetchSms();
     });
-    // Then refresh every 60 seconds
     _smsTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) widget.onFetchSms();
     });
-    // Listen for real-time incoming SMS
     _initRealTimeSmsListener();
   }
 
@@ -255,7 +314,6 @@ class _TransactAIShellState extends State<TransactAIShell> {
     SmsService.listenToIncomingSms((SmsAlert alert) async {
       if (!mounted) return;
 
-      // Add to feed immediately
       widget.onNewSmsReceived(alert);
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -270,9 +328,8 @@ class _TransactAIShellState extends State<TransactAIShell> {
 
         if (mounted) {
           final category = result['category'] ?? 'Unknown';
-          final amount = result['amount'] != null
-              ? '₹${result['amount']}'
-              : '';
+          final amount =
+              result['amount'] != null ? '₹${result['amount']}' : '';
           final merchant =
               result['receiver'] ?? result['receiver_name'] ?? alert.sender;
 
@@ -289,8 +346,11 @@ class _TransactAIShellState extends State<TransactAIShell> {
   }
 
   void _handleNewTransaction(Transaction txn) {
-    // Dashboard fetches live from API — just trigger a refresh
     _dashboardKey.currentState?.refreshData();
+    if (_pendingClassifyAlertBody != null) {
+      widget.onSmsClassified(_pendingClassifyAlertBody!);
+      _pendingClassifyAlertBody = null;
+    }
   }
 
   void _classifySmsFromFeed(SmsAlert alert) {
@@ -298,6 +358,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
       _classifyInitialText = alert.body;
       _currentIndex = 3;
     });
+    _pendingClassifyAlertBody = alert.body;
   }
 
   @override
@@ -305,7 +366,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
     final List<Widget> screens = [
       DashboardScreen(
         key: _dashboardKey,
-        transactions: const [],        // always empty — dashboard loads from API
+        transactions: const [],
         onUpdateTransaction: (_) {},
         onSync: widget.onFetchSms,
         onLogout: widget.onLogout,
@@ -313,10 +374,10 @@ class _TransactAIShellState extends State<TransactAIShell> {
         onAvatarChanged: widget.onAvatarChanged,
       ),
       InsightsScreen(
-        transactions: const [],        // always empty — insights loads from API
+        transactions: const [],
       ),
       SmsFeedScreen(
-        smsAlerts: widget.smsAlerts,   // real SMS only, no mocks
+        smsAlerts: widget.smsAlerts,
         onClassifySms: _classifySmsFromFeed,
         onFetchSms: widget.onFetchSms,
       ),
@@ -365,7 +426,8 @@ class _TransactAIShellState extends State<TransactAIShell> {
                 const Icon(Icons.mail_outline_outlined),
                 if (pendingSmsCount > 0)
                   Positioned(
-                    right: 0, top: 0,
+                    right: 0,
+                    top: 0,
                     child: Container(
                       padding: const EdgeInsets.all(1),
                       decoration: const BoxDecoration(
@@ -388,4 +450,4 @@ class _TransactAIShellState extends State<TransactAIShell> {
       ),
     );
   }
-} 
+}

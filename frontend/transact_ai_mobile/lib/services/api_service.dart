@@ -2,16 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// ─────────────────────────────────────────────────────────
-///  HOW TO SET baseUrl:
-///
-///  Android emulator  → http://10.0.2.2:8000
-///  iOS simulator     → http://127.0.0.1:8000
-///  Physical device   → http://<YOUR_LAN_IP>:8000
-///   (find LAN IP on Windows: ipconfig | find "IPv4")
-///   (find LAN IP on Mac/Linux: ifconfig | grep "inet ")
-/// ─────────────────────────────────────────────────────────
-const String _baseUrl = 'http://10.0.2.2:8000';
+  
+const String _baseUrl = 'http://192.168.1.33:8000'; // 
 
 class ApiService {
   static final _client = http.Client();

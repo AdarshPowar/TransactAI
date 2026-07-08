@@ -26,27 +26,54 @@ class AppColors {
   static const Color categoryShopping = Color(0xFFF59E0B); // Amber
   static const Color categoryOther = Color(0xFF71717A); // Slate
 
+  // category other
+  static const Color categoryFuel = Color(0xFFEF4444);       // Red
+  static const Color categoryTransport = Color(0xFF3B82F6);  // Blue  
+  static const Color categoryMedical = Color(0xFFEC4899);    // Pink
+  static const Color categoryBills = Color(0xFF14B8A6);      // Teal
+  static const Color categorySalary = Color(0xFF22C55E);     // Green
+  static const Color categorySubscription = Color(0xFFA855F7); // Violet
+  static const Color categoryUpiTransfer = Color(0xFFF97316); // Orange
+  static const Color categoryRefund = Color(0xFF06B6D4);     // Cyan
+
   // Retrieve category color dynamically
   static Color getCategoryColor(String category) {
-    switch (category.toLowerCase().trim()) {
-      case 'groceries':
-        return categoryGroceries;
-      case 'healthcare':
-        return categoryHealthcare;
-      case 'utilities':
-        return categoryUtilities;
-      case 'entertainment':
-        return categoryEntertainment;
-      case 'dining':
-      case 'dining/food':
-      case 'food':
-        return categoryDining;
-      case 'shopping':
-        return categoryShopping;
-      default:
-        return categoryOther;
-    }
+  switch (category.toLowerCase().trim()) {
+    case 'food':
+    case 'dining':
+    case 'dining/food':
+      return categoryDining;
+    case 'grocery':
+    case 'groceries':
+      return categoryGroceries;
+    case 'fuel':
+      return categoryFuel;
+    case 'shopping':
+      return categoryShopping;
+    case 'medical':
+    case 'healthcare':
+      return categoryMedical;
+    case 'bills':
+    case 'utilities':
+      return categoryBills;
+    case 'transport':
+    case 'transportation':
+      return categoryTransport;
+    case 'refund':
+      return categoryRefund;
+    case 'salary':
+      return categorySalary;
+    case 'subscription':
+    case 'entertainment':
+      return categorySubscription;
+    case 'upi_transfer':
+    case 'upi transfer':
+    case 'fund transfer':
+      return categoryUpiTransfer;
+    default:
+      return categoryOther;
   }
+}
 }
 
 class AppTheme {
@@ -107,3 +134,4 @@ class AppTheme {
     );
   }
 }
+
