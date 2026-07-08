@@ -64,7 +64,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final Map<String, double> categorySums = categorySummary.map(
       (k, v) => MapEntry(k, (v as num).toDouble()),
     );
-    final Map<String, int> categoryCounts = {};
+    final Map<String, int> categoryCounts = {
+  for (var entry in categorySums.entries)
+    entry.key: 1, // default 1 per category since /summary doesn't return counts
+};
 
     final List<DonutChartData> chartData = [];
     categorySums.forEach((cat, amt) {
