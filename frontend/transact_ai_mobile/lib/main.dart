@@ -34,7 +34,7 @@ Future<void> main() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-enum AppStatus { checking, launch, login, signup, pinSetup, locked, authenticated }
+enum AppStatus { checking, launch, login, signup, locked, authenticated }
 
 class TransactAIApp extends StatefulWidget {
   const TransactAIApp({super.key});
@@ -59,14 +59,13 @@ class _TransactAIAppState extends State<TransactAIApp> {
     final user = FirebaseAuth.instance.currentUser;
     if (!mounted) return;
     if (user != null) {
-      // User is logged in — check if PIN is set up
       final hasPin = await PinService.hasPin();
       if (!mounted) return;
       if (hasPin) {
         setState(() => _status = AppStatus.locked);
       } else {
-        // Logged in but no PIN set — go to PIN setup
-        setState(() => _status = AppStatus.pinSetup);
+        // No PIN set — go straight to home, user can set PIN from profile
+        setState(() => _status = AppStatus.authenticated);
       }
     } else {
       setState(() => _status = AppStatus.launch);
@@ -151,13 +150,6 @@ class _TransactAIAppState extends State<TransactAIApp> {
         return LaunchScreen(
           key: const ValueKey('launch'),
           onGetStarted: () => setState(() => _status = AppStatus.login),
-        );
-
-      case AppStatus.pinSetup:
-        return PinScreen(
-          key: const ValueKey('pinSetup'),
-          mode: PinScreenMode.setup,
-          onSuccess: () => setState(() => _status = AppStatus.authenticated),
         );
 
       case AppStatus.locked:
@@ -391,7 +383,19 @@ class _TransactAIShellState extends State<TransactAIShell> {
     final pendingSmsCount =
         widget.smsAlerts.where((s) => !s.isClassified).length;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false, // never exit app with back button
+      onPopInvokedWithResult: (didPop, result) {
+        if (_currentIndex != 0) {
+          // Go back to Dashboard instead of exiting
+          setState(() {
+            _currentIndex = 0;
+            _classifyInitialText = null;
+          });
+        }
+        // If already on Dashboard, do nothing (don't exit)
+      },
+      child: Scaffold(
       body: SafeArea(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
@@ -448,6 +452,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
           ],
         ),
       ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 }

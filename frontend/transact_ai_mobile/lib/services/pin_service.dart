@@ -30,4 +30,17 @@ class PinService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_pinKey);
   }
+static const _bioKey = 'transactai_biometric_enabled';
+
+static Future<bool> isBiometricEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_bioKey) ?? false;
+}
+
+static Future<void> setBiometricEnabled(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_bioKey, value);
+}
+
+
 }

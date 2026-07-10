@@ -42,12 +42,41 @@ class _PinScreenState extends State<PinScreen> with SingleTickerProviderStateMix
     _shakeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
-    _checkBiometrics();
-    // Auto-trigger biometric prompt in verify mode
-    if (widget.mode == PinScreenMode.verify) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _triggerBiometric();
-      });
+    // Check biometrics first, then auto-trigger if in verify mode
+    _checkBiometricsAndAutoTrigger();
+  }
+
+  Future<void> _checkBiometricsAndAutoTrigger() async {
+    try {
+      final available = await _localAuth.isDeviceSupported();
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final bioEnabled = await PinService.isBiometricEnabled();
+
+      debugPrint('🔐 Biometric debug:');
+      debugPrint('  isDeviceSupported: $available');
+      debugPrint('  canCheckBiometrics: $canCheck');
+      debugPrint('  isBiometricEnabled (pref): $bioEnabled');
+
+      // Get available biometric types
+      final biometrics = await _localAuth.getAvailableBiometrics();
+      debugPrint('  Available biometrics: $biometrics');
+
+      // isAvailable: device supports it AND user enabled it in app settings
+      // If bioEnabled is false, biometric won't show — user needs to enable it in Profile
+      final isAvailable = available && canCheck && bioEnabled;
+      debugPrint('  Final _biometricAvailable: $isAvailable');
+
+      if (mounted) {
+        setState(() => _biometricAvailable = isAvailable);
+      }
+
+      if (isAvailable && widget.mode == PinScreenMode.verify && mounted) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (mounted) await _triggerBiometric();
+      }
+    } catch (e) {
+      debugPrint('Biometric check error: $e');
+      if (mounted) setState(() => _biometricAvailable = false);
     }
   }
 
@@ -57,17 +86,7 @@ class _PinScreenState extends State<PinScreen> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  Future<void> _checkBiometrics() async {
-    try {
-      final available = await _localAuth.isDeviceSupported();
-      final canCheck = await _localAuth.canCheckBiometrics;
-      if (mounted) {
-        setState(() => _biometricAvailable = available && canCheck);
-      }
-    } catch (_) {
-      setState(() => _biometricAvailable = false);
-    }
-  }
+
 
   Future<void> _triggerBiometric() async {
     if (!_biometricAvailable) return;
@@ -344,6 +363,7 @@ class _PinScreenState extends State<PinScreen> with SingleTickerProviderStateMix
       ),
     );
   }
+  
 
   Widget _buildFingerprint() {
     return GestureDetector(

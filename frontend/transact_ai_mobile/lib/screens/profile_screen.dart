@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import '../theme/constants.dart';
+import '../services/pin_service.dart';
+import 'pin_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final int activeAvatarIndex;
   final Function(int) onAvatarChanged;
   final VoidCallback onLogout;
@@ -13,6 +16,13 @@ class ProfileScreen extends StatelessWidget {
     required this.onLogout,
   });
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+bool _biometricEnabled = false;
+
+class _ProfileScreenState extends State<ProfileScreen> {
   static final List<IconData> avatarIcons = [
     Icons.person_outline,
     Icons.face_retouching_natural_outlined,
@@ -27,9 +37,183 @@ class ProfileScreen extends StatelessWidget {
     'Secured Admin',
   ];
 
+  bool _hasPin = false;
+  bool _biometricAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSecurityState();
+  }
+
+  Future<void> _loadSecurityState() async {
+  final hasPin = await PinService.hasPin();
+  final bioEnabled = await PinService.isBiometricEnabled();
+  final localAuth = LocalAuthentication();
+  final canCheck = await localAuth.canCheckBiometrics;
+  final isSupported = await localAuth.isDeviceSupported();
+  if (mounted) {
+    setState(() {
+      _hasPin = hasPin;
+      _biometricEnabled = bioEnabled;
+      _biometricAvailable = canCheck && isSupported;
+    });
+  }
+}
+
+  void _setupPin() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PinScreen(
+        mode: PinScreenMode.setup,
+        onSuccess: () async {
+          Navigator.pop(context);
+          setState(() => _hasPin = true);
+          // Ask about biometric if available
+          if (_biometricAvailable) {
+            await _askBiometricPermission();
+          } else {
+            _showSnack('PIN set successfully ✓');
+          }
+        },
+      ),
+    ),
+  );
+}
+
+  Future<void> _askBiometricPermission() async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AlertDialog(
+      backgroundColor: AppColors.surfaceElevated,
+      title: const Row(
+        children: [
+          Icon(Icons.fingerprint, color: Colors.white, size: 22),
+          SizedBox(width: 10),
+          Text(
+            'Enable Biometrics?',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+      content: const Text(
+        'Would you like to use fingerprint or Face ID instead of entering your PIN every time?',
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text(
+            'Not Now',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text(
+            'Enable',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (result == true) {
+    await PinService.setBiometricEnabled(true);
+    setState(() => _biometricEnabled = true);
+    _showSnack('PIN + Fingerprint enabled ✓');
+  } else {
+    _showSnack('PIN set successfully ✓');
+  }
+}
+
+  void _changePin() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PinScreen(
+          mode: PinScreenMode.verify,
+          onSuccess: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PinScreen(
+                  mode: PinScreenMode.setup,
+                  onSuccess: () {
+                    Navigator.pop(context);
+                    _showSnack('PIN changed successfully ✓');
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _removePin() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surfaceElevated,
+        title: const Text(
+          'Remove PIN',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure? You will no longer be asked for PIN when opening the app.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await PinService.clearPin();
+              if (mounted) {
+                setState(() => _hasPin = false);
+                _showSnack('PIN removed');
+              }
+            },
+            child: const Text('Remove',
+                style: TextStyle(color: AppColors.categoryHealthcare)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.surfaceElevated,
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final activeIcon = avatarIcons[activeAvatarIndex];
+    final activeIcon = avatarIcons[widget.activeAvatarIndex];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -56,7 +240,7 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar Selector Center Section
+            // ── Avatar ────────────────────────────────────────────────────
             Center(
               child: Column(
                 children: [
@@ -71,11 +255,7 @@ class ProfileScreen extends StatelessWidget {
                           border: Border.all(color: AppColors.border, width: 1.5),
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          activeIcon,
-                          color: AppColors.textPrimary,
-                          size: 44,
-                        ),
+                        child: Icon(activeIcon, color: AppColors.textPrimary, size: 44),
                       ),
                       Positioned(
                         right: 0,
@@ -88,11 +268,7 @@ class ProfileScreen extends StatelessWidget {
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              color: Colors.black,
-                              size: 16,
-                            ),
+                            child: const Icon(Icons.camera_alt, color: Colors.black, size: 16),
                           ),
                         ),
                       ),
@@ -100,295 +276,300 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    avatarLabels[activeAvatarIndex],
+                    avatarLabels[widget.activeAvatarIndex],
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'session: active_token_user',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 36),
 
-            // App UI Color Palette Section
+            const SizedBox(height: 40),
+
+            // ── Security Section ─────────────────────────────────────────
             const Text(
-              'APP UI COLORS',
+              'SECURITY',
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1.0,
+                letterSpacing: 1.2,
                 color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 12),
-            _buildColorsPalette(),
 
-            const SizedBox(height: 32),
-
-            // Privacy Policy Section
-            const Text(
-              'PRIVACY POLICY & DATA STORAGE',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.0,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 border: Border.all(color: AppColors.border, width: 0.8),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
                 children: [
-                  Text(
-                    'On-Device Local Classification',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  // PIN status row
+                  _SecurityTile(
+                    icon: Icons.lock_outline,
+                    title: _hasPin ? 'PIN Lock' : 'Set App PIN',
+                    subtitle: _hasPin
+                        ? 'PIN is active — app locks on close'
+                        : 'Add a 4-digit PIN to secure the app',
+                    trailing: _hasPin
+                        ? _Badge('ON', AppColors.categoryGroceries)
+                        : const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                    onTap: _hasPin ? null : _setupPin,
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'TransactAI is built with a local-first security architecture. All banking transaction SMS alerts and text descriptions are processed strictly on-device. The classification engine utilizes offline deterministic rules, followed by a lightweight sequence model (DistilBERT), and falls back to SentenceTransformer semantic embeddings. No raw message texts, transaction logs, or personal financial details are uploaded to external cloud systems. User verification corrections are fed directly back into the local model for reinforcement learning. Your financial data is private and secure.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
+
+                  if (_hasPin) ...[
+                    _divider(),
+                    _SecurityTile(
+                      icon: Icons.edit_outlined,
+                      title: 'Change PIN',
+                      subtitle: 'Update your 4-digit PIN',
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                      onTap: _changePin,
                     ),
-                  ),
+                    _divider(),
+                    _SecurityTile(
+                      icon: Icons.lock_open_outlined,
+                      title: 'Remove PIN',
+                      subtitle: 'Disable PIN lock for this app',
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                      onTap: _removePin,
+                      titleColor: AppColors.categoryHealthcare,
+                    ),
+                  ],
+
+                  if (_biometricAvailable) ...[
+                    _divider(),
+                    _SecurityTile(
+                      icon: Icons.fingerprint,
+                      title: 'Fingerprint / Face ID',
+                      subtitle: _hasPin
+                          ? 'Available on PIN screen as alternative'
+                          : 'Set a PIN first to enable biometric login',
+                      trailing: _hasPin
+                          ? _Badge('ON', AppColors.categoryGroceries)
+                          : _Badge('OFF', AppColors.textMuted),
+                      onTap: null,
+                    ),
+                  ],
                 ],
               ),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
-            // Sign Out CTA Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                  onLogout(); // Call logout callback
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.categoryHealthcare, width: 1.0),
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Sign Out Session',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.categoryHealthcare,
-                  ),
-                ),
+            // ── Account Section ──────────────────────────────────────────
+            const Text(
+              'ACCOUNT',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 12),
+
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.border, width: 0.8),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: _SecurityTile(
+                icon: Icons.logout,
+                title: 'Sign Out',
+                subtitle: 'Sign out of your TransactAI account',
+                trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                onTap: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  widget.onLogout();
+                },
+                titleColor: AppColors.categoryHealthcare,
+              ),
+            ),
+
+            const SizedBox(height: 48),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildColorsPalette() {
-    final List<Map<String, dynamic>> systemColors = [
-      {'name': 'True Black', 'hex': '#000000', 'color': AppColors.background},
-      {'name': 'Dark Surface', 'hex': '#121212', 'color': AppColors.surface},
-      {'name': 'Muted Gray', 'hex': '#98989F', 'color': AppColors.textSecondary},
-    ];
-
-    final List<Map<String, dynamic>> accentColors = [
-      {'name': 'Groceries', 'hex': '#10B981', 'color': AppColors.categoryGroceries},
-      {'name': 'Healthcare', 'hex': '#EE5A24', 'color': AppColors.categoryHealthcare},
-      {'name': 'Utilities', 'hex': '#0EA5E9', 'color': AppColors.categoryUtilities},
-      {'name': 'Entertainment', 'hex': '#8B5CF6', 'color': AppColors.categoryEntertainment},
-      {'name': 'Dining', 'hex': '#F43F5E', 'color': AppColors.categoryDining},
-      {'name': 'Shopping', 'hex': '#F59E0B', 'color': AppColors.categoryShopping},
-    ];
-
-    return Column(
-      children: [
-        // System Core
-        Row(
-          children: systemColors.map((colorItem) {
-            return Expanded(
-              child: Container(
-                margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border.all(color: AppColors.border, width: 0.8),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: colorItem['color'] as Color,
-                        borderRadius: BorderRadius.circular(3),
-                        border: Border.all(color: AppColors.borderBright, width: 0.5),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      colorItem['name'] as String,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    Text(
-                      colorItem['hex'] as String,
-                      style: const TextStyle(fontSize: 8, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 8),
-        // Accents Grid
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 6,
-            mainAxisSpacing: 6,
-            childAspectRatio: 2.1,
-          ),
-          itemCount: accentColors.length,
-          itemBuilder: (context, index) {
-            final accentItem = accentColors[index];
-            final color = accentItem['color'] as Color;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.06),
-                border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    accentItem['name'] as String,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    accentItem['hex'] as String,
-                    style: TextStyle(fontSize: 8, color: color.withValues(alpha: 0.8)),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
+  Widget _divider() => Divider(
+        height: 1,
+        color: AppColors.border.withOpacity(0.5),
+        indent: 52,
+      );
 
   void _showAvatarPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.borderBright,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.borderBright,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            const SizedBox(height: 20),
+            const Text(
+              'CHOOSE AVATAR',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'CHOOSE PROFILE PHOTO',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                  color: AppColors.textSecondary,
-                ),
+            ),
+            const SizedBox(height: 20),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
-              const SizedBox(height: 20),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: avatarIcons.length,
-                itemBuilder: (context, index) {
-                  final isSelected = activeAvatarIndex == index;
-                  return GestureDetector(
-                    onTap: () {
-                      onAvatarChanged(index);
-                      Navigator.pop(context);
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.white : AppColors.surfaceElevated,
-                        border: Border.all(
-                          color: isSelected ? Colors.white : AppColors.border,
-                          width: 1.0,
-                        ),
-                        shape: BoxShape.circle,
+              itemCount: avatarIcons.length,
+              itemBuilder: (context, index) {
+                final isSelected = widget.activeAvatarIndex == index;
+                return GestureDetector(
+                  onTap: () {
+                    widget.onAvatarChanged(index);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : AppColors.surfaceElevated,
+                      border: Border.all(
+                        color: isSelected ? Colors.white : AppColors.border,
+                        width: 1.0,
                       ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        avatarIcons[index],
-                        color: isSelected ? Colors.black : Colors.white,
-                        size: 24,
-                      ),
+                      shape: BoxShape.circle,
                     ),
-                  );
-                },
+                    alignment: Alignment.center,
+                    child: Icon(
+                      avatarIcons[index],
+                      color: isSelected ? Colors.black : Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Badge(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _SecurityTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget trailing;
+  final VoidCallback? onTap;
+  final Color? titleColor;
+
+  const _SecurityTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    required this.onTap,
+    this.titleColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      },
+              alignment: Alignment.center,
+              child: Icon(icon, color: AppColors.textSecondary, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: titleColor ?? AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ),
+      ),
     );
   }
 }
