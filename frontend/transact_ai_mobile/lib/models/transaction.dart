@@ -9,6 +9,7 @@ class Transaction {
   final ClassificationStrategy strategy;
   final double confidence;
   final String? rawSms;
+  final String? paymentApp;
   bool isConfirmed;
 
   Transaction({
@@ -21,6 +22,7 @@ class Transaction {
     required this.confidence,
     this.rawSms,
     this.isConfirmed = false,
+    this.paymentApp,
   });
 
   String get strategyLabel {
@@ -34,7 +36,11 @@ class Transaction {
     }
   }
 
-  Transaction copyWith({String? category, bool? isConfirmed}) {
+  Transaction copyWith({
+    String? category, 
+    bool? isConfirmed,
+    String? paymentApp,
+  }) {
     return Transaction(
       id: id,
       merchant: merchant,
@@ -45,7 +51,43 @@ class Transaction {
       confidence: confidence,
       rawSms: rawSms,
       isConfirmed: isConfirmed ?? this.isConfirmed,
+      paymentApp: paymentApp ?? this.paymentApp, // Added to prevent data loss
     );
+  }
+
+  // Helper to parse from Supabase Database / JSON
+  factory Transaction.fromMap(Map<String, dynamic> map) {
+    return Transaction(
+      id: map['id'] as String,
+      merchant: map['merchant'] as String,
+      amount: (map['amount'] as num).toDouble(),
+      category: map['category'] as String,
+      date: DateTime.parse(map['date'] as String),
+      strategy: ClassificationStrategy.values.firstWhere(
+        (e) => e.name == map['strategy'],
+        orElse: () => ClassificationStrategy.rule,
+      ),
+      confidence: (map['confidence'] as num).toDouble(),
+      rawSms: map['rawSms'] as String?,
+      isConfirmed: map['isConfirmed'] as bool? ?? false,
+      paymentApp: map['payment_app'] as String?, // Maps to the new Postgres column
+    );
+  }
+
+  // Helper to send data to Supabase Database / JSON
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'merchant': merchant,
+      'amount': amount,
+      'category': category,
+      'date': date.toIso8601String(),
+      'strategy': strategy.name,
+      'confidence': confidence,
+      'rawSms': rawSms,
+      'isConfirmed': isConfirmed,
+      'payment_app': paymentApp, // Maps to the new Postgres column
+    };
   }
 }
 

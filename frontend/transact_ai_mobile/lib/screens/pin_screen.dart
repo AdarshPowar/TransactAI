@@ -310,7 +310,7 @@ class _PinScreenState extends State<PinScreen> with SingleTickerProviderStateMix
                 TextButton(
                   onPressed: widget.onLoginInstead,
                   child: const Text(
-                    'Sign in with a different account',
+                    'Forgot pin',
                     style: TextStyle(
                       fontSize: 13,
                       color: Color(0xFF666666),

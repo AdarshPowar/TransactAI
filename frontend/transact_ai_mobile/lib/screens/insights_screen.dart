@@ -149,7 +149,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       ),
                 ),
                 Text(
-                  'Rs{chartData.length} categories',
+                  '${chartData.length} categories',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textMuted,
@@ -254,7 +254,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹{amount.toStringAsFixed(2)}',
+                '₹${amount.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -263,7 +263,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Rspercentage%',
+                '$percentage%',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
