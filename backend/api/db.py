@@ -5,6 +5,24 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+print("=== STARTING X-RAY DEBUG ===", flush=True)
+
+raw_user = os.getenv("DB_USER")
+raw_pass = os.getenv("DB_PASS")
+raw_host = os.getenv("DB_HOST")
+raw_port = os.getenv("DB_PORT")
+raw_name = os.getenv("DB_NAME")
+
+print(f"DB_USER: {repr(raw_user)}", flush=True)
+print(f"DB_PASS: {repr(raw_pass)}", flush=True)
+print(f"DB_HOST: {repr(raw_host)}", flush=True)
+print(f"DB_PORT: {repr(raw_port)}", flush=True)
+print(f"DB_NAME: {repr(raw_name)}", flush=True)
+
+print("=== END X-RAY DEBUG ===", flush=True)
+sys.stdout.flush()
+# --- END OF DEBUG CODE ---
+
 # Load .env
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
