@@ -47,31 +47,31 @@ class AppColors {
     case 'groceries':
       return categoryGroceries;
     case 'fuel':
-      return categoryFuel;
+      return const Color.fromARGB(255, 208, 242, 54);
     case 'shopping':
       return categoryShopping;
     case 'medical':
     case 'healthcare':
-      return categoryMedical;
+      return const Color.fromARGB(255, 35, 45, 224);
     case 'bills':
     case 'utilities':
-      return categoryBills;
+      return const Color.fromARGB(255, 129, 136, 135);
     case 'transport':
     case 'transportation':
-      return categoryTransport;
+      return const Color.fromARGB(255, 0, 0, 0);
     case 'refund':
-      return categoryRefund;
+      return const Color.fromARGB(255, 102, 6, 212);
     case 'salary':
-      return categorySalary;
+      return const Color.fromARGB(255, 198, 201, 203);
     case 'subscription':
     case 'entertainment':
-      return categorySubscription;
+      return const Color.fromARGB(255, 159, 31, 155);
     case 'upi_transfer':
     case 'upi transfer':
     case 'fund transfer':
       return categoryUpiTransfer;
     default:
-      return categoryOther;
+      return const Color.fromARGB(255, 255, 255, 255);
   }
 }
 }

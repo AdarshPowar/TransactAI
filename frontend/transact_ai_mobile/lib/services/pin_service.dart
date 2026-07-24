@@ -1,33 +1,60 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Handles storing and verifying the app's 4-digit PIN.
-/// PIN is stored as a plain string in SharedPreferences.
-/// For production you'd want to hash it — fine for portfolio/MVP.
 class PinService {
-  static const _pinKey = 'transactai_app_pin';
+  static const String _pinKey = 'user_pin';
+  static const String _loggedInKey = 'is_logged_in';
+  static const String _bioKey = 'biometric_enabled';
 
-  /// Returns true if a PIN has been set by the user.
+  // --- PIN Management ---
+
   static Future<bool> hasPin() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey(_pinKey);
   }
 
-  /// Saves a new PIN.
+  static Future<void> setPin(String pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pinKey, pin);
+  }
+
+  // Restored: savePin (functions exactly like setPin but matches your original naming)
   static Future<void> savePin(String pin) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_pinKey, pin);
   }
 
-  /// Returns true if the provided PIN matches the stored one.
   static Future<bool> verifyPin(String pin) async {
     final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_pinKey);
-    return stored == pin;
+    final storedPin = prefs.getString(_pinKey);
+    return storedPin == pin;
   }
 
-  /// Clears the stored PIN (e.g. on logout).
   static Future<void> clearPin() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_pinKey);
+  }
+
+  // --- Biometric Management (Restored) ---
+  
+  static Future<bool> isBiometricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_bioKey) ?? false;
+  }
+
+  static Future<void> setBiometricEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_bioKey, value);
+  }
+
+  // --- Login State Fallback ---
+
+  static Future<void> setLoggedIn(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_loggedInKey, value);
+  }
+
+  static Future<bool> isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_loggedInKey) ?? false;
   }
 }

@@ -34,7 +34,7 @@ Future<void> main() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-enum AppStatus { checking, launch, login, signup, pinSetup, locked, authenticated }
+enum AppStatus { checking, launch, login, signup, locked, authenticated }
 
 class TransactAIApp extends StatefulWidget {
   const TransactAIApp({super.key});
@@ -55,18 +55,32 @@ class _TransactAIAppState extends State<TransactAIApp> {
   }
 
   Future<void> _checkAuthState() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    final user = FirebaseAuth.instance.currentUser;
+    User? user;
+    try {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      user = FirebaseAuth.instance.currentUser;
+    }
+
+    debugPrint('🔥 Auth check — user: ${user?.uid ?? "NULL"}');
+
     if (!mounted) return;
-    if (user != null) {
-      // User is logged in — check if PIN is set up
+
+    // 1. Check our local SharedPreferences fallback
+    bool isLocallyLoggedIn = await PinService.isLoggedIn();
+
+    // 2. Proceed if Firebase has a user OR our local flag says they are logged in
+    if (user != null || isLocallyLoggedIn) {
       final hasPin = await PinService.hasPin();
+      debugPrint('🔐 hasPin: $hasPin');
       if (!mounted) return;
       if (hasPin) {
         setState(() => _status = AppStatus.locked);
       } else {
-        // Logged in but no PIN set — go to PIN setup
-        setState(() => _status = AppStatus.pinSetup);
+        setState(() => _status = AppStatus.authenticated);
       }
     } else {
       setState(() => _status = AppStatus.launch);
@@ -77,27 +91,57 @@ class _TransactAIAppState extends State<TransactAIApp> {
     try {
       final fetchedAlerts = await SmsService.fetchIncomingSms();
       if (!mounted) return;
-      int newCount = 0;
+      
+      List<SmsAlert> newlyAddedAlerts = [];
+      
       setState(() {
         for (final alert in fetchedAlerts) {
           final exists = _smsAlerts.any(
               (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
           if (!exists) {
             _smsAlerts.add(alert);
-            newCount++;
+            newlyAddedAlerts.add(alert); // Track new alerts for classification
           }
         }
         _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       });
-      if (newCount > 0 && mounted) {
+      
+      if (newlyAddedAlerts.isNotEmpty && mounted) {
         rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
-          content: Text('Found $newCount new banking SMS.'),
+          content: Text('Found ${newlyAddedAlerts.length} new banking SMS. Classifying in background...'),
           backgroundColor: AppColors.surfaceElevated,
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
         ));
+        
+        // Fire and forget the background classification
+        _processBackgroundClassifications(newlyAddedAlerts);
       }
     } catch (e) {
       debugPrint('Error fetching SMS: $e');
+    }
+  }
+
+  Future<void> _processBackgroundClassifications(List<SmsAlert> newAlerts) async {
+    for (final alert in newAlerts) {
+      // Skip if it somehow already got classified
+      if (alert.isClassified) continue; 
+      
+      try {
+        // Send to FastAPI /classify endpoint
+        await ApiService.classify(alert.body);
+        
+        // Update the UI state to remove the yellow pending indicator
+        if (mounted) {
+          setState(() {
+            final idx = _smsAlerts.indexWhere((s) => s.id == alert.id);
+            if (idx != -1) {
+              _smsAlerts[idx] = _smsAlerts[idx].copyWith(isClassified: true);
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('Background auto-classify error for SMS ID ${alert.id}: $e');
+      }
     }
   }
 
@@ -105,6 +149,7 @@ class _TransactAIAppState extends State<TransactAIApp> {
     try {
       await AuthService.instance.signOut();
       await PinService.clearPin();
+      await PinService.setLoggedIn(false); // Clear the local login flag
     } catch (e) {
       debugPrint('Sign out error: $e');
     }
@@ -153,13 +198,6 @@ class _TransactAIAppState extends State<TransactAIApp> {
           onGetStarted: () => setState(() => _status = AppStatus.login),
         );
 
-      case AppStatus.pinSetup:
-        return PinScreen(
-          key: const ValueKey('pinSetup'),
-          mode: PinScreenMode.setup,
-          onSuccess: () => setState(() => _status = AppStatus.authenticated),
-        );
-
       case AppStatus.locked:
         return PinScreen(
           key: const ValueKey('locked'),
@@ -168,6 +206,7 @@ class _TransactAIAppState extends State<TransactAIApp> {
           onLoginInstead: () async {
             await PinService.clearPin();
             await AuthService.instance.signOut();
+            await PinService.setLoggedIn(false);
             setState(() => _status = AppStatus.login);
           },
         );
@@ -191,15 +230,20 @@ class _TransactAIAppState extends State<TransactAIApp> {
             try {
               await ApiService.login(email, password);
             } catch (_) {}
+            
+            await PinService.setLoggedIn(true);
             if (mounted) setState(() => _status = AppStatus.authenticated);
           },
-          onPhoneLogin: (phone) {
+          onPhoneLogin: (phone) async {
+            await PinService.setLoggedIn(true);
             setState(() => _status = AppStatus.authenticated);
           },
           onGoogleLogin: () async {
             try {
               final user = await AuthService.instance.signInWithGoogle();
               if (user == null) return;
+              
+              await PinService.setLoggedIn(true);
               setState(() => _status = AppStatus.authenticated);
             } catch (e) {
               debugPrint('Google login error: $e');
@@ -222,6 +266,8 @@ class _TransactAIAppState extends State<TransactAIApp> {
             try {
               await ApiService.signup(name, email, password);
             } catch (_) {}
+            
+            await PinService.setLoggedIn(true);
             if (mounted) setState(() => _status = AppStatus.authenticated);
           },
           onGoToLogin: () => setState(() => _status = AppStatus.login),

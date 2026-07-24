@@ -15,6 +15,7 @@ class TransactionCreate(BaseModel):
     predicted_category: Optional[str]
     confidence: Optional[float]
     source: Optional[str] = "mobile"
+    payment_app: Optional[str] = None
 
 
 class TransactionResponse(TransactionCreate):
