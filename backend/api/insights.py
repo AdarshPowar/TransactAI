@@ -11,9 +11,9 @@ from api.models import Transaction
 router = APIRouter()
 
 # Helper to ensure Transaction table exists (no-op if already created elsewhere)
-with engine.connect() as conn:
+##with engine.connect() as conn:
     # Do nothing here - assume Base.metadata.create_all was already called
-    pass
+    ##pass
 
 
 @router.get("/monthly")

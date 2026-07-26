@@ -5,33 +5,29 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-print("=== STARTING X-RAY DEBUG ===", flush=True)
-
-raw_user = os.getenv("DB_USER")
-raw_pass = os.getenv("DB_PASS")
-raw_host = os.getenv("DB_HOST")
-raw_port = os.getenv("DB_PORT")
-raw_name = os.getenv("DB_NAME")
-
-print(f"DB_USER: {repr(raw_user)}", flush=True)
-print(f"DB_PASS: {repr(raw_pass)}", flush=True)
-print(f"DB_HOST: {repr(raw_host)}", flush=True)
-print(f"DB_PORT: {repr(raw_port)}", flush=True)
-print(f"DB_NAME: {repr(raw_name)}", flush=True)
-
-print("=== END X-RAY DEBUG ===", flush=True)
-sys.stdout.flush()
-# --- END OF DEBUG CODE ---
-
-# Load .env
+# Load .env (only applies locally — Render injects env vars directly)
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "6543")
-DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
+# Strip null characters and whitespace defensively
+def _clean(value, default=""):
+    if value is None:
+        return default
+    return value.strip().replace('\x00', '').replace('\r', '')
+
+DB_HOST = _clean(os.getenv("DB_HOST"))
+DB_PORT = _clean(os.getenv("DB_PORT"), "6543")
+DB_NAME = _clean(os.getenv("DB_NAME"), "postgres")
+DB_USER = _clean(os.getenv("DB_USER"))
+DB_PASS = _clean(os.getenv("DB_PASS"))
+
+# Debug — shows in Render deploy logs so you can confirm values
+print(f"[DB] HOST={repr(DB_HOST)} PORT={repr(DB_PORT)} NAME={repr(DB_NAME)} USER={repr(DB_USER)}")
+
+if not DB_HOST or not DB_USER:
+    raise RuntimeError(
+        f"Missing required DB env vars. HOST={repr(DB_HOST)} USER={repr(DB_USER)}"
+    )
 
 # URL-encode the password so special characters like '@' don't break the URL
 safe_password = urllib.parse.quote_plus(DB_PASS) if DB_PASS else ""
@@ -39,10 +35,15 @@ safe_password = urllib.parse.quote_plus(DB_PASS) if DB_PASS else ""
 # Build connection string
 DATABASE_URL = f"postgresql://{DB_USER}:{safe_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
+print(f"[DB] Connecting to {DB_HOST}:{DB_PORT}/{DB_NAME}")
+
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    connect_args={"connect_timeout": 10},
 )
 
 # Session factory
