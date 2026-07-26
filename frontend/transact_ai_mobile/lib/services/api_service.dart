@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 
   
-const String _baseUrl = 'http://192.168.1.35:8000'; // 
+const String _baseUrl = 'https://transactai.onrender.com'; // 
 
 class ApiService {
   static final _client = http.Client();
