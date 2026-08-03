@@ -9,7 +9,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, func
 import pandas as pd
-
+from datetime import datetime
+from fastapi import FastAPI
 # ============================================================
 # 1. LOAD ENVIRONMENT VARIABLES FIRST!
 # ============================================================
@@ -81,6 +82,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- HEALTH ROUT ADDED --
+@app.get("/health", tags=["System"])
+def health_check():
+    """Lightweight endpoint to keep the server awake."""
+    return {
+        "success": True,
+        "message": "Server is healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+#----------------------------------------
 
 # <<<<<<< feature/frontend-fix
 # ============================================================
