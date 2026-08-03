@@ -84,9 +84,8 @@ app.add_middleware(
 )
 
 # --- HEALTH ROUT ADDED --
-@app.get("/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
 def health_check():
-    """Lightweight endpoint to keep the server awake."""
     return {
         "success": True,
         "message": "Server is healthy",
