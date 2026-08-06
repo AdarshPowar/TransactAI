@@ -7,7 +7,10 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 # from training.train_model import train_with_feedback
-from core.model import TransactionClassifier
+try:
+    from backend.core.model import TransactionClassifier
+except ModuleNotFoundError:  # pragma: no cover - legacy import fallback
+    from core.model import TransactionClassifier
 from api.db import get_db
 from api.models import Feedback
 
