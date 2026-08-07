@@ -1,62 +1,44 @@
-# ============================
 # Virtual Environment
-# ============================
-
 venv/
 .venv/
 .env
 .env.*
 
-# ============================
-# Python Cache
-# ============================
-
+# Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
 
-# ============================
-# Editor
-# ============================
-
+# Editors
 .vscode/
 .idea/
 
-# ============================
 # Dataset
-# ============================
-
 data/*
 !data/.gitkeep
 
-# ============================
 # Models
-# Ignore everything except the production classifier
-# ============================
-
 models/*
 !models/classifier/
 !models/classifier/**
 
-# Ignore generated checkpoints and temporary files
 models/classifier_ckpts/
 models/plots/
 models/*.tmp
 
+# Training artifacts
 models/classification_report.json
 models/dataset_statistics.json
 models/model_metadata.json
 models/split_statistics.json
 models/training_history.json
 
-# ============================
-# Logs & Test Outputs
-# ============================
+# Generated outputs
+outputs/
 
+# Logs
 logs/
 runs/
-
-# ============================
-# Misc
-# ============================
-
 *.log

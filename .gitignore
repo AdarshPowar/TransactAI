@@ -39,16 +39,6 @@ runs/
 # GENERATED MODEL ARTIFACTS
 # ============================
 
-backend/models/*.tmp
-backend/models/classifier/
-backend/models/classifier_ckpts/
-backend/models/plots/
-
-backend/models/classification_report.json
-backend/models/dataset_statistics.json
-backend/models/model_metadata.json
-backend/models/split_statistics.json
-backend/models/training_history.json
 
 # ============================
 # DEVELOPMENT TOOLS

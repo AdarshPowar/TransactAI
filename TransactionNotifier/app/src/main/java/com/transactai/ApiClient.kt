@@ -28,7 +28,8 @@ interface CategorizationApi {
  */
 object ApiClient {
     // TODO: Replace with your actual backend IP address
-    private const val BASE_URL = "http://10.254.244.112:8000/api/" // Using the IP from the deleted class
+    // NOTE: the backend serves /classify at the ROOT (no /api prefix).
+    private const val BASE_URL = "http://10.254.244.112:8000/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
