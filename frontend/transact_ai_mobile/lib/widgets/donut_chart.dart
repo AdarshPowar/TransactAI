@@ -92,7 +92,7 @@ class _DonutChartState extends State<DonutChart> with SingleTickerProviderStateM
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${widget.totalAmount.toStringAsFixed(2)}',
+                    '₹${widget.totalAmount.toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
