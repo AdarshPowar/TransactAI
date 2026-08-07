@@ -91,29 +91,35 @@ class _TransactAIAppState extends State<TransactAIApp> {
     try {
       final fetchedAlerts = await SmsService.fetchIncomingSms();
       if (!mounted) return;
-      
+
+      // Load already-classified IDs from persistent storage
+      final classifiedIds = await PinService.getClassifiedIds();
+
       List<SmsAlert> newlyAddedAlerts = [];
-      
+
       setState(() {
         for (final alert in fetchedAlerts) {
           final exists = _smsAlerts.any(
               (s) => s.id == alert.id || s.body.trim() == alert.body.trim());
           if (!exists) {
-            _smsAlerts.add(alert);
-            newlyAddedAlerts.add(alert); // Track new alerts for classification
+            // If previously classified, mark it immediately — don't reclassify
+            final alreadyClassified = classifiedIds.contains(alert.id);
+            _smsAlerts.add(alreadyClassified
+                ? alert.copyWith(isClassified: true)
+                : alert);
+            if (!alreadyClassified) newlyAddedAlerts.add(alert);
           }
         }
         _smsAlerts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       });
-      
+
       if (newlyAddedAlerts.isNotEmpty && mounted) {
         rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
-          content: Text('Found ${newlyAddedAlerts.length} new banking SMS. Classifying in background...'),
+          content: Text(
+              'Found ${newlyAddedAlerts.length} new banking SMS. Classifying...'),
           backgroundColor: AppColors.surfaceElevated,
           duration: const Duration(seconds: 3),
         ));
-        
-        // Fire and forget the background classification
         _processBackgroundClassifications(newlyAddedAlerts);
       }
     } catch (e) {
@@ -121,21 +127,24 @@ class _TransactAIAppState extends State<TransactAIApp> {
     }
   }
 
-  Future<void> _processBackgroundClassifications(List<SmsAlert> newAlerts) async {
+  Future<void> _processBackgroundClassifications(
+      List<SmsAlert> newAlerts) async {
     for (final alert in newAlerts) {
-      // Skip if it somehow already got classified
-      if (alert.isClassified) continue; 
-      
+      if (alert.isClassified) continue;
+
       try {
-        // Send to FastAPI /classify endpoint
         await ApiService.classify(alert.body);
-        
-        // Update the UI state to remove the yellow pending indicator
+
+        // Persist this ID so it won't be reclassified on next app open
+        await PinService.markClassified(alert.id);
+
         if (mounted) {
           setState(() {
-            final idx = _smsAlerts.indexWhere((s) => s.id == alert.id);
+            final idx =
+                _smsAlerts.indexWhere((s) => s.id == alert.id);
             if (idx != -1) {
-              _smsAlerts[idx] = _smsAlerts[idx].copyWith(isClassified: true);
+              _smsAlerts[idx] =
+                  _smsAlerts[idx].copyWith(isClassified: true);
             }
           });
         }
@@ -149,7 +158,8 @@ class _TransactAIAppState extends State<TransactAIApp> {
     try {
       await AuthService.instance.signOut();
       await PinService.clearPin();
-      await PinService.setLoggedIn(false); // Clear the local login flag
+      await PinService.setLoggedIn(false);
+      await PinService.clearClassifiedIds();
     } catch (e) {
       debugPrint('Sign out error: $e');
     }
