@@ -1,29 +1,62 @@
-# Virtual env
+# ============================
+# Virtual Environment
+# ============================
+
 venv/
+.venv/
 .env
+.env.*
 
-# Python cache
+# ============================
+# Python Cache
+# ============================
+
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Editor files
+# ============================
+# Editor
+# ============================
+
 .vscode/
+.idea/
 
-# Ignore training dataset but keep model
+# ============================
+# Dataset
+# ============================
+
 data/*
 !data/.gitkeep
 
-# Ignore everything in models EXCEPT the trained classifier folder
-models/*
-!models/classifier/**
-!models/classifier_metrics.json
-!models/classifier_encoder.pkl
-!models/classifier_tfidf.pkl
-!models/classifier_model.pkl
+# ============================
+# Models
+# Ignore everything except the production classifier
+# ============================
 
-# Allow safetensors, json, vocab, tokenizer inside classifier
-!models/classifier/*.safetensors
-!models/classifier/*.json
-!models/classifier/*.txt
-!models/classifier/*.pkl
-!models/classifier/*.pt
+models/*
+!models/classifier/
+!models/classifier/**
+
+# Ignore generated checkpoints and temporary files
+models/classifier_ckpts/
+models/plots/
+models/*.tmp
+
+models/classification_report.json
+models/dataset_statistics.json
+models/model_metadata.json
+models/split_statistics.json
+models/training_history.json
+
+# ============================
+# Logs & Test Outputs
+# ============================
+
+logs/
+runs/
+
+# ============================
+# Misc
+# ============================
+
+*.log

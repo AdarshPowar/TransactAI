@@ -11,7 +11,10 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Dict, List, Optional, Tuple
 
-from core.fuzzy_utils import fuzzy_contains
+try:
+    from backend.core.fuzzy_utils import fuzzy_contains
+except ModuleNotFoundError:  # pragma: no cover - legacy import fallback
+    from core.fuzzy_utils import fuzzy_contains
 
 
 RULE_CONFIG: Dict[str, Dict] = {
