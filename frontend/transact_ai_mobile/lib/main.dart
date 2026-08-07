@@ -437,7 +437,18 @@ class _TransactAIShellState extends State<TransactAIShell> {
     final pendingSmsCount =
         widget.smsAlerts.where((s) => !s.isClassified).length;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (_currentIndex != 0) {
+          setState(() {
+            _currentIndex = 0;
+            _classifyInitialText = null;
+          });
+        }
+        // Already on home — do nothing, don't exit
+      },
+      child: Scaffold(
       body: SafeArea(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
@@ -494,6 +505,7 @@ class _TransactAIShellState extends State<TransactAIShell> {
           ],
         ),
       ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 }
