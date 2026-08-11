@@ -4,10 +4,13 @@ import com.google.gson.annotations.SerializedName
 
 /**
  * Request model for categorization API
+ *
+ * NOTE: the backend /classify endpoint expects the JSON field `message`
+ * (see backend/api/main.py — it reads payload.get("sms_text") or payload.get("message")).
  */
 data class CategorizationRequest(
-    @SerializedName("text")
-    val text: String
+    @SerializedName("message")
+    val message: String
 )
 
 /**

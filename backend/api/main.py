@@ -120,7 +120,7 @@ try:
         port=os.getenv("DB_PORT"),
         database=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
+        password=os.getenv("DB_PASSWORD"),
     )
     print("✅ PostgreSQL Connection Pool Established")
 except Exception as e:
@@ -221,9 +221,6 @@ def classify(payload: Dict, db: Session = Depends(get_db)):
     text = payload.get("sms_text") or payload.get("message")
     if not text:
         raise HTTPException(status_code=400, detail="Missing 'sms_text' or 'message' field")
-    text = payload.get("message")
-    if not text:
-        raise HTTPException(status_code=400, detail="Missing 'message' field")
 
     # Use consistent preprocessing
     cleaned = clean_text_for_model(text)

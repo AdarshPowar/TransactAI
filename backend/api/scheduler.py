@@ -6,7 +6,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 from sqlalchemy.orm import Session
 
-# from training.train_model import train_with_feedback
+try:
+    from backend.training.train_model import train_with_feedback
+except ModuleNotFoundError:  # pragma: no cover - legacy import fallback
+    from training.train_model import train_with_feedback
 try:
     from backend.core.model import TransactionClassifier
 except ModuleNotFoundError:  # pragma: no cover - legacy import fallback

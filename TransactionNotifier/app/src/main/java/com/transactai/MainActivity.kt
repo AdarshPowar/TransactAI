@@ -10,7 +10,6 @@ import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -80,8 +79,9 @@ class MainActivity : AppCompatActivity() {
         if (!isNotificationAccessGranted()) {
             showNotificationPermissionDialog()
         } else {
+            // NotificationListenerService is bound by the system automatically
+            // when notification access is granted — it must NOT be started manually.
             Log.d(TAG, "✅ Notification service is enabled")
-            startNotificationService()
         }
     }
 
@@ -125,30 +125,12 @@ class MainActivity : AppCompatActivity() {
         if (isNotificationAccessGranted()) {
             statusTextView.text = "✅ Notification Access Enabled\n\nTransactionNotifier is actively monitoring banking and payment notifications.\n\nSend a UPI payment to test transaction detection."
             enableButton.text = "Settings"
-
-            // Start service when permission is granted
-            startNotificationService()
         } else {
             statusTextView.text = "🔔 Notification Access Required\n\nTo monitor transactions:\n1. Click 'Enable Notification Access'\n2. Find 'TransactAI' in the list\n3. Toggle the switch ON\n4. Return to this app"
             enableButton.text = "Enable Notification Access"
         }
 
         updateDebugInfo()
-    }
-
-    /**
-     * Start the notification service
-     */
-    private fun startNotificationService() {
-        try {
-            val intent = Intent(this, NotificationService::class.java)
-            ContextCompat.startForegroundService(this, intent)
-            Log.d(TAG, "🚀 Notification service started")
-            addDebugLog("🚀 Notification service started")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to start service: ${e.message}")
-            addDebugLog("❌ Failed to start service: ${e.message}")
-        }
     }
 
     /**
