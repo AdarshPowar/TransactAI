@@ -21,16 +21,22 @@ load_dotenv()
 # ============================================================
 # >>>>>>> main
 # Core modules
-from core.preprocessor import (
-    clean_text_for_model,
-    extract_amount,
-    extract_recipient,
-    TransactionPreprocessor
-)
-# <<<<<<< feature/frontend-fix
-
-# >>>>>>> main
-from core.inference import TransactionClassifier
+try:
+    from backend.core.preprocessor import (
+        clean_text_for_model,
+        extract_amount,
+        extract_recipient,
+        TransactionPreprocessor,
+    )
+    from backend.core.inference import TransactionClassifier, create_predictor
+except ModuleNotFoundError:  # pragma: no cover - legacy import fallback
+    from core.preprocessor import (
+        clean_text_for_model,
+        extract_amount,
+        extract_recipient,
+        TransactionPreprocessor,
+    )
+    from core.inference import TransactionClassifier, create_predictor
 
 # Routers
 from api.models import Transaction, Feedback
@@ -38,12 +44,14 @@ from api.db import get_db
 from api.insights import router as insights_router
 from api.budget import router as budget_router
 # <<<<<<< feature/frontend-fix
-from api.predict import router as predict_router   
-from api.predict import router as predict_router   # Ensure prediction API is enabled
+from api.predict import router as predict_router
 # >>>>>>> main
 
 # Training integration
-from training.train_model import train_with_feedback
+try:
+    from backend.training.train_model import train_with_feedback
+except ModuleNotFoundError:  # pragma: no cover - legacy import fallback
+    from training.train_model import train_with_feedback
 
 # <<<<<<< feature/frontend-fix
 # ============================================================
@@ -127,7 +135,8 @@ except Exception as e:
 processor = TransactionPreprocessor()
 
 try:
-    classifier = TransactionClassifier()  # loads models inside __init__()
+    runtime = os.getenv("TRANSACTAI_INFERENCE_BACKEND")
+    classifier = create_predictor(runtime=runtime) if runtime else TransactionClassifier()
     app.state.classifier = classifier
     print("✅ Classifier Loaded into app.state.classifier")
 except Exception as e:
@@ -197,6 +206,7 @@ def root():
 app.include_router(insights_router, prefix="/insights")
 app.include_router(budget_router, prefix="/budget")
 app.include_router(predict_router, prefix="/api")    # FIXED: Prediction endpoint enabled
+app.include_router(predict_router)
 
 
 # ============================================================
@@ -533,7 +543,8 @@ def retrain_model(background_tasks: BackgroundTasks, db: Session = Depends(get_d
             print("[RETRAIN] Training complete")
 
             # Reload classifier
-            new_clf = TransactionClassifier()
+            runtime = os.getenv("TRANSACTAI_INFERENCE_BACKEND")
+            new_clf = create_predictor(runtime=runtime) if runtime else TransactionClassifier()
             app.state.classifier = new_clf
             print("[RETRAIN] Model reloaded successfully")
         except Exception as e:

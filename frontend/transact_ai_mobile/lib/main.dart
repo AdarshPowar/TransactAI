@@ -16,6 +16,7 @@ import 'services/auth_service.dart';
 import 'models/transaction.dart';
 // ignore: unused_import
 import 'screens/profile_screen.dart';
+import 'services/notification_service.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/pin_service.dart';
@@ -26,6 +27,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService.instance.initialize();
   runApp(const TransactAIApp());
 }
 
@@ -133,10 +135,21 @@ class _TransactAIAppState extends State<TransactAIApp> {
       if (alert.isClassified) continue;
 
       try {
-        await ApiService.classify(alert.body);
+        final result = await ApiService.classify(alert.body);
 
         // Persist this ID so it won't be reclassified on next app open
         await PinService.markClassified(alert.id);
+
+        // Show notification
+        final category = result['category'] ?? 'Unknown';
+        final amount = result['amount']?.toString() ?? '0';
+        final merchant =
+            result['receiver_name'] ?? result['receiver'] ?? 'Unknown';
+        await NotificationService.instance.showClassificationNotification(
+          category: category,
+          amount: amount,
+          merchant: merchant,
+        );
 
         if (mounted) {
           setState(() {
@@ -382,15 +395,21 @@ class _TransactAIShellState extends State<TransactAIShell> {
         widget.onSmsClassified(alert.body);
         _dashboardKey.currentState?.refreshData();
 
-        if (mounted) {
-          final category = result['category'] ?? 'Unknown';
-          final amount =
-              result['amount'] != null ? '₹${result['amount']}' : '';
-          final merchant =
-              result['receiver'] ?? result['receiver_name'] ?? alert.sender;
+        // Show notification
+        final category = result['category'] ?? 'Unknown';
+        final amount = result['amount']?.toString() ?? '0';
+        final merchant =
+            result['receiver'] ?? result['receiver_name'] ?? alert.sender;
 
+        await NotificationService.instance.showClassificationNotification(
+          category: category,
+          amount: amount,
+          merchant: merchant,
+        );
+
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Classified: $merchant → $category $amount'),
+            content: Text('Classified: $merchant → $category ₹$amount'),
             backgroundColor: const Color(0xFF1D9E75),
             duration: const Duration(seconds: 4),
           ));

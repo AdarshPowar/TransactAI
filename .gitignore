@@ -3,25 +3,58 @@
 # ============================
 
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 *.egg-info/
 *.egg
 build/
 dist/
 
-# virtual env
+# Virtual Environments
 venv/
 .venv/
-# <<<<<<< feature/frontend-fix
 backend/myenv/
 
-=======
-# >>>>>>> main
+# Environment Variables
+.env
+.env.*
 
-# models temp
+# ============================
+# PYTHON TESTING & CACHE
+# ============================
+
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# ============================
+# GENERATED TRAINING ARTIFACTS
+# ============================
+
+runs/
+*.arrow
+
+# ============================
+# GENERATED MODEL ARTIFACTS
+# ============================
+
 backend/models/*.tmp
+backend/models/classifier/
+backend/models/classifier_ckpts/
+backend/models/plots/
+
+backend/models/classification_report.json
+backend/models/dataset_statistics.json
+backend/models/model_metadata.json
+backend/models/split_statistics.json
+backend/models/training_history.json
+
+# ============================
+# DEVELOPMENT TOOLS
+# ============================
+
+synthetic_generator/
 
 # ============================
 # NODE / NEXT.JS FRONTEND
@@ -31,6 +64,7 @@ node_modules/
 .next/
 out/
 dist/
+
 frontend/transaction_categorization/.env*
 frontend/transaction_categorization/**/*.log
 
@@ -43,7 +77,10 @@ docker-data/
 docker-volume/
 *.pid
 
-# compressed files
+# ============================
+# COMPRESSED FILES
+# ============================
+
 *.zip
 *.tar
 *.tar.gz
@@ -73,12 +110,19 @@ TransactionNotifier/*.apk
 TransactionNotifier/*/debug/
 TransactionNotifier/*/release/
 
-# ignore entire project except README (optional)
+# Ignore entire Android project except README
 TransactionNotifier/*
 !TransactionNotifier/README.md
 
 # ============================
-# PROJECT SPECIFIC FILES
+# OS FILES
+# ============================
+
+.DS_Store
+Thumbs.db
+
+# ============================
+# PROJECT SPECIFIC
 # ============================
 
 backend_structure.txt

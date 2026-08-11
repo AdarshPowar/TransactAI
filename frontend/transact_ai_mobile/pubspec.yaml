@@ -35,6 +35,9 @@ dependencies:
 ## shared preferences
   shared_preferences: ^2.3.2
 
+## Notifications
+  flutter_local_notifications: ^18.0.1
+
   
   flutter:
     sdk: flutter
