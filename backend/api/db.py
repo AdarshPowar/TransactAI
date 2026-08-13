@@ -19,7 +19,7 @@ DB_HOST = _clean(os.getenv("DB_HOST"))
 DB_PORT = _clean(os.getenv("DB_PORT"), "6543")
 DB_NAME = _clean(os.getenv("DB_NAME"), "postgres")
 DB_USER = _clean(os.getenv("DB_USER"))
-DB_PASS = _clean(os.getenv("DB_PASSWORD"))
+DB_PASS = _clean(os.getenv("DB_PASS"))
 
 # Debug — shows in Render deploy logs so you can confirm values
 print(f"[DB] HOST={repr(DB_HOST)} PORT={repr(DB_PORT)} NAME={repr(DB_NAME)} USER={repr(DB_USER)}")
