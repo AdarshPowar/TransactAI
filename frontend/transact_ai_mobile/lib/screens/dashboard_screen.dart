@@ -32,6 +32,40 @@ class DashboardScreenState extends State<DashboardScreen> {
   bool _apiLoading = true;
   bool _apiError = false;
 
+  // Month filter — null means "All"
+  DateTime? _selectedMonth;
+
+  // Filtered transactions based on selected month
+  List<Map<String, dynamic>> get _filteredTransactions {
+    if (_selectedMonth == null) return _apiTransactions;
+    return _apiTransactions.where((tx) {
+      final raw = tx['txn_time'] ?? tx['created_at'] ?? '';
+      if (raw.isEmpty) return false;
+      try {
+        final date = DateTime.parse(raw.toString());
+        return date.year == _selectedMonth!.year &&
+            date.month == _selectedMonth!.month;
+      } catch (_) {
+        return false;
+      }
+    }).toList();
+  }
+
+  // Get unique months from transactions for the filter dropdown
+  List<DateTime> get _availableMonths {
+    final months = <DateTime>{};
+    for (final tx in _apiTransactions) {
+      final raw = tx['txn_time'] ?? tx['created_at'] ?? '';
+      if (raw.isEmpty) continue;
+      try {
+        final date = DateTime.parse(raw.toString());
+        months.add(DateTime(date.year, date.month));
+      } catch (_) {}
+    }
+    final list = months.toList()..sort((a, b) => b.compareTo(a));
+    return list;
+  }
+
   void refreshData() {
     _loadFromApi();
   }
@@ -66,7 +100,82 @@ class DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  @override
+  String _monthLabel(DateTime month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '\${months[month.month - 1]} \${month.year}';
+  }
+
+  void _showMonthPicker(BuildContext context) {
+    final months = _availableMonths;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.borderBright,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'FILTER BY MONTH',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.calendar_today_outlined,
+                color: AppColors.textSecondary, size: 20),
+            title: const Text('All Transactions',
+                style: TextStyle(color: Colors.white, fontSize: 14)),
+            trailing: _selectedMonth == null
+                ? const Icon(Icons.check, color: Colors.white, size: 18)
+                : null,
+            onTap: () {
+              setState(() => _selectedMonth = null);
+              Navigator.pop(context);
+            },
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          ...months.map((month) {
+            final isSelected = _selectedMonth?.year == month.year &&
+                _selectedMonth?.month == month.month;
+            return ListTile(
+              leading: const Icon(Icons.calendar_month_outlined,
+                  color: AppColors.textSecondary, size: 20),
+              title: Text(_monthLabel(month),
+                  style: const TextStyle(color: Colors.white, fontSize: 14)),
+              trailing: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 18)
+                  : null,
+              onTap: () {
+                setState(() => _selectedMonth = month);
+                Navigator.pop(context);
+              },
+            );
+          }),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+    @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -143,16 +252,65 @@ class DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // ── Transactions ──────────────────────────────
+            // ── Transactions Header + Month Filter ────────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Recent Transactions',
                         style: theme.textTheme.titleMedium),
-                    if (_apiError)
+                    // Month filter dropdown
+                    if (!_apiLoading && !_apiError && _apiTransactions.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => _showMonthPicker(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            border: Border.all(
+                                color: _selectedMonth != null
+                                    ? Colors.white
+                                    : AppColors.border,
+                                width: 1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.calendar_month_outlined,
+                                size: 13,
+                                color: _selectedMonth != null
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _selectedMonth != null
+                                    ? _monthLabel(_selectedMonth!)
+                                    : 'All',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _selectedMonth != null
+                                      ? Colors.white
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Icon(Icons.arrow_drop_down,
+                                  size: 16,
+                                  color: _selectedMonth != null
+                                      ? Colors.white
+                                      : AppColors.textSecondary),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_apiError)
                       const Text('(local)',
                           style: TextStyle(
                               fontSize: 11, color: AppColors.textMuted)),
@@ -160,17 +318,62 @@ class DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            const SliverToBoxAdapter(child: SizedBox(height: 4)),
+
+            // Filtered count hint
+            if (_selectedMonth != null && !_apiLoading && !_apiError)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${_filteredTransactions.length} transactions in ${_monthLabel(_selectedMonth!)}',
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textMuted),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedMonth = null),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // API transactions list
-            if (!_apiLoading && !_apiError && _apiTransactions.isNotEmpty)
+            if (!_apiLoading && !_apiError && _filteredTransactions.isNotEmpty)
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, i) => _ApiTransactionTile(tx: _apiTransactions[i]),
-                  childCount: _apiTransactions.length,
+                  (context, i) =>
+                      _ApiTransactionTile(tx: _filteredTransactions[i]),
+                  childCount: _filteredTransactions.length,
                 ),
               )
-            // Fallback: local mock transactions
+            else if (!_apiLoading && !_apiError &&
+                _apiTransactions.isNotEmpty &&
+                _filteredTransactions.isEmpty)
+              const SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text(
+                      'No transactions in this month.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                ),
+              )
             else if (displayTransactions != null &&
                 displayTransactions.isNotEmpty)
               SliverList(
